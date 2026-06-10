@@ -1,0 +1,40 @@
+name: Run Tests (Jest)
+
+on: push
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: ./
+
+jobs:
+  app-testing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Runner Common Setup
+        uses: mridang/action-runner-common@v1
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Jest
+        run: npm run test
+
+      - name: Generate coverage report
+        if: always()
+        uses: mridang/action-test-reporter@v3
+        with:
+          results-path: '.out/junit.xml'
+          coverage-path: '.out/lcov.info'

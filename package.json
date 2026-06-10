@@ -1,0 +1,88 @@
+{
+  "name": "@mridang/nestjs-platform-cloudflare",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prepack": "tsc",
+    "build": "tsc",
+    "test": "jest --verbose --config=jest.config.mjs --runInBand",
+    "test:watch": "npm run test -- --watch",
+    "test:debug": "jest --verbose --config=jest.config.mjs --runInBand --detectOpenHandles",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "npx eslint .",
+    "lint:fix": "npx eslint . --fix"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [
+    "nestjs",
+    "cloudflare",
+    "workers",
+    "adapter",
+    "fetch",
+    "serverless"
+  ],
+  "author": {
+    "name": "Mridang Agarwalla",
+    "email": "mridang.agarwalla@gmail.com",
+    "url": "https://github.com/mridang"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "description": "Cloudflare Workers HTTP adapter for NestJS — run NestJS on Workers with no Express, no node:http, and no port.",
+  "private": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mridang/nestjs-platform-cloudflare.git"
+  },
+  "homepage": "https://github.com/mridang/nestjs-platform-cloudflare",
+  "bugs": "https://github.com/mridang/nestjs-platform-cloudflare/issues",
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@cloudflare/workers-types": "^4"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4",
+    "@jest/globals": "^30.0.3",
+    "@mridang/eslint-defaults": "^1.4.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.0",
+    "@semantic-release/npm": "^13.1.1",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@tsconfig/node22": "^22.0.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.18.12",
+    "cookie-parser": "^1.4.7",
+    "eslint": "^9.27.0",
+    "helmet": "^8.0.0",
+    "jest": "^30.0.3",
+    "jest-junit": "^16.0.0",
+    "knip": "^5.43.6",
+    "prettier": "^3.1.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "semantic-release": "^25.0.1",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.9.3",
+    "urlpattern-polyfill": "^10.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

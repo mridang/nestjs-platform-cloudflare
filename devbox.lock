@@ -1,0 +1,54 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "nodejs@22": {
+      "last_modified": "2026-03-21T07:29:51Z",
+      "plugin_version": "0.0.2",
+      "resolved": "github:NixOS/nixpkgs/09061f748ee21f68a089cd5d91ec1859cd93d0be#nodejs_22",
+      "source": "devbox-search",
+      "version": "22.22.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/c5rhp8fwf3zhrwqs1hg3x23346al7g1a-nodejs-22.22.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/c5rhp8fwf3zhrwqs1hg3x23346al7g1a-nodejs-22.22.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/gvb9pgbsrsrr2cf14hbwb9cpl8qhv1kv-nodejs-22.22.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/gvb9pgbsrsrr2cf14hbwb9cpl8qhv1kv-nodejs-22.22.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/fd5fsgjv5lmp1qzms41f6bf1gkk4pb82-nodejs-22.22.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/fd5fsgjv5lmp1qzms41f6bf1gkk4pb82-nodejs-22.22.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/q04hinixx2jzv5ap76zv61c8fyx9ajbv-nodejs-22.22.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/q04hinixx2jzv5ap76zv61c8fyx9ajbv-nodejs-22.22.1"
+        }
+      }
+    }
+  }
+}
