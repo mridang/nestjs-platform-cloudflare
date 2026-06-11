@@ -69,6 +69,7 @@ export type {
   ExpressNextFunction,
   ExpressLikeApp,
   CookieOptions,
+  WrappedExpressMiddleware,
 } from './compat/express-compat.js';
 
 export {
