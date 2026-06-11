@@ -28,5 +28,5 @@ export default {
       },
     ],
   ],
-  repositoryUrl: 'git+https://github.com/mridang/semantic-release-oci.git',
+  repositoryUrl: 'git+https://github.com/mridang/nestjs-platform-cloudflare.git',
 };
