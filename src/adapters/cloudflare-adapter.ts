@@ -205,8 +205,185 @@ export interface CloudflareResponse {
    */
   // eslint-disable-next-line no-undef
   end(body?: BodyInit | null): void;
+  /**
+   * Append a `Set-Cookie` header serialized from the name/value and attributes.
+   * Mirrors Express's `res.cookie()` so `@Res()` controllers can set cookies on
+   * the native response without the Express compatibility wrapper.
+   * @param name Cookie name.
+   * @param value Cookie value.
+   * @param options Cookie attributes (maxAge, httpOnly, secure, sameSite, ...).
+   * @returns This response, for chaining.
+   */
+  cookie(name: string, value: string, options?: CookieOptions): this;
+  /**
+   * Append an expired `Set-Cookie` header that clears the named cookie. Mirrors
+   * Express's `res.clearCookie()`.
+   * @param name Cookie name.
+   * @param options Cookie attributes (path, domain, ...) used to scope the clear.
+   * @returns This response, for chaining.
+   */
+  clearCookie(name: string, options?: CookieOptions): this;
   /** Resolve the internal settled promise (set once a body is produced). */
   settle(): void;
+}
+
+/** Attributes accepted by {@link CloudflareResponse.cookie}. */
+export interface CookieOptions {
+  /** `Max-Age` in milliseconds (Express semantics); emitted as seconds. */
+  maxAge?: number;
+  /** `Expires` date. */
+  expires?: Date;
+  /** `Domain` attribute. */
+  domain?: string;
+  /** `Path` attribute (defaults to `/`). */
+  path?: string;
+  /** `HttpOnly` flag. */
+  httpOnly?: boolean;
+  /** `Secure` flag. */
+  secure?: boolean;
+  /** `SameSite` attribute. */
+  sameSite?: boolean | 'lax' | 'strict' | 'none';
+}
+
+/**
+ * Serialize a cookie name/value pair plus attributes into a `Set-Cookie` value.
+ * Matches the Express compatibility layer's serializer so cookies set via the
+ * native response and via wrapped Express middleware are byte-identical.
+ *
+ * @param name Cookie name.
+ * @param value Cookie value.
+ * @param options Cookie attributes.
+ * @returns The serialized `Set-Cookie` header value.
+ */
+function serializeSetCookie(
+  name: string,
+  value: string,
+  options: CookieOptions = {},
+): string {
+  let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+  if (options.maxAge !== undefined) {
+    cookie += `; Max-Age=${Math.floor(options.maxAge / 1000)}`;
+  }
+  if (options.domain) {
+    cookie += `; Domain=${options.domain}`;
+  }
+  cookie += `; Path=${options.path ?? '/'}`;
+  if (options.expires) {
+    cookie += `; Expires=${options.expires.toUTCString()}`;
+  }
+  if (options.httpOnly) {
+    cookie += '; HttpOnly';
+  }
+  if (options.secure) {
+    cookie += '; Secure';
+  }
+  if (options.sameSite) {
+    const same =
+      options.sameSite === true
+        ? 'Strict'
+        : options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1);
+    cookie += `; SameSite=${same}`;
+  }
+  return cookie;
+}
+
+/**
+ * Wrap native `Headers` in a Proxy that ALSO answers Express-style bracket
+ * access (`headers['x-github-event']`) by delegating unknown string keys to
+ * `Headers.get`, returning the value lower-cased-key-insensitively. Real
+ * `Headers` members (`get`, `has`, `forEach`, `Symbol.iterator`, ...) pass
+ * through untouched, so the object remains a fully functional `Headers` for
+ * Nest internals and the compat layers while letting unmodified controllers
+ * that read `req.headers[name]` (the standard Express idiom) keep working.
+ *
+ * @param headers The native request headers.
+ * @returns A `Headers`-compatible proxy supporting bracket access.
+ */
+function headerProxy(headers: Headers): Headers {
+  return new Proxy(headers, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'string' && !(prop in target)) {
+        const value = target.get(prop);
+        return value === null ? undefined : value;
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    has(target, prop) {
+      if (typeof prop === 'string' && target.has(prop)) {
+        return true;
+      }
+      return Reflect.has(target, prop);
+    },
+  }) as Headers;
+}
+
+/** The subset of Nest's `StreamableFile` the adapter reads. */
+interface StreamableFileLike {
+  /** Return the underlying Node Readable stream. */
+  getStream(): { on?: unknown };
+  /** Return the response headers (type, disposition, length). */
+  getHeaders(): {
+    type?: string;
+    disposition?: string;
+    length?: number;
+  };
+}
+
+/**
+ * Detect Nest's `StreamableFile` structurally (no import to keep the adapter
+ * decoupled from `@nestjs/common`'s runtime), so controllers that return a
+ * StreamableFile stream their bytes instead of being JSON-serialized.
+ *
+ * @param body The value a controller returned.
+ * @returns The value typed as a StreamableFile, or `null` if it is not one.
+ */
+function asStreamableFile(body: unknown): StreamableFileLike | null {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    typeof (body as StreamableFileLike).getStream === 'function' &&
+    typeof (body as StreamableFileLike).getHeaders === 'function'
+  ) {
+    return body as StreamableFileLike;
+  }
+  return null;
+}
+
+/**
+ * Convert a Node Readable stream into a Web `ReadableStream` so the Workers
+ * runtime can stream it as a response body. Uses the native `Readable.toWeb`
+ * when present (Node/`nodejs_compat`), and otherwise pumps the Node stream's
+ * `data`/`end`/`error` events into a Web stream manually.
+ *
+ * @param nodeStream The Node Readable stream to convert.
+ * @returns A Web `ReadableStream` over the same bytes.
+ */
+function nodeStreamToWeb(nodeStream: {
+  on?: unknown;
+}): ReadableStream<Uint8Array> {
+  const ctor = (
+    nodeStream as { constructor?: { toWeb?: (s: unknown) => ReadableStream } }
+  ).constructor;
+  if (ctor && typeof ctor.toWeb === 'function') {
+    return ctor.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+  }
+  const stream = nodeStream as {
+    on(event: string, cb: (arg?: unknown) => void): void;
+  };
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      stream.on('data', (chunk) =>
+        controller.enqueue(
+          chunk instanceof Uint8Array
+            ? chunk
+            : new Uint8Array(chunk as ArrayBufferLike),
+        ),
+      );
+      stream.on('end', () => controller.close());
+      stream.on('error', (err) => controller.error(err));
+    },
+  });
 }
 
 /**
@@ -1102,6 +1279,30 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     if (statusCode) {
       res.statusCode = statusCode;
     }
+    const streamable = asStreamableFile(body);
+    if (streamable) {
+      // Nest's StreamableFile (returned from controllers as a streamed file
+      // response, e.g. images). It carries its own Content-Type/Disposition via
+      // getHeaders() and a Node Readable via getStream(); convert the Readable to
+      // a Web ReadableStream so the Workers runtime can stream it.
+      const fileHeaders = streamable.getHeaders();
+      if (fileHeaders?.type && !res.headers.has('content-type')) {
+        res.headers.set('content-type', fileHeaders.type);
+      }
+      if (fileHeaders?.disposition) {
+        res.headers.set('content-disposition', fileHeaders.disposition);
+      }
+      if (fileHeaders?.length !== undefined) {
+        res.headers.set('content-length', String(fileHeaders.length));
+      }
+      const nodeStream = streamable.getStream();
+      // eslint-disable-next-line no-undef
+      res.body = nodeStreamToWeb(nodeStream) as BodyInit;
+      res.sent = true;
+      res.headersSent = true;
+      res.settle();
+      return;
+    }
     if (body === undefined || body === null) {
       res.body = null;
     } else if (typeof body === 'string') {
@@ -1663,7 +1864,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       secure: true,
       ip: request.headers.get('cf-connecting-ip') ?? '',
       hostname: url.hostname,
-      headers: request.headers,
+      headers: headerProxy(request.headers),
       query: url.search ? parseQuery(url.searchParams) : emptyRecord(),
       // Never expose the frozen sentinel — middleware may write to req.params.
       params: params === EMPTY ? emptyRecord() : params,
@@ -1825,6 +2026,21 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         res.sent = true;
         res.headersSent = true;
         resolve();
+      },
+      cookie(name, value, options = {}) {
+        headers.append('Set-Cookie', serializeSetCookie(name, value, options));
+        return res;
+      },
+      clearCookie(name, options = {}) {
+        headers.append(
+          'Set-Cookie',
+          serializeSetCookie(name, '', {
+            ...options,
+            expires: new Date(0),
+            maxAge: 0,
+          }),
+        );
+        return res;
       },
     };
     return res;
@@ -2042,7 +2258,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         protocol: 'https',
         secure: true,
         hostname: url.hostname,
-        headers: request.headers,
+        headers: headerProxy(request.headers),
         query: url.search ? parseQuery(url.searchParams) : emptyRecord(),
         params: emptyRecord(),
         cookies: parseCookies(request.headers.get('cookie')),
