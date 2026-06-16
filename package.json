@@ -44,9 +44,9 @@
   "homepage": "https://github.com/mridang/nestjs-platform-cloudflare",
   "bugs": "https://github.com/mridang/nestjs-platform-cloudflare/issues",
   "peerDependencies": {
+    "@cloudflare/workers-types": "^4",
     "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@cloudflare/workers-types": "^4"
+    "@nestjs/core": "^11.0.0"
   },
   "peerDependenciesMeta": {
     "@cloudflare/workers-types": {
@@ -55,8 +55,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4",
+    "@eslint/compat": "^2.1.0",
     "@jest/globals": "^30.0.3",
-    "@mridang/eslint-defaults": "^1.4.0",
+    "@mridang/eslint-defaults": "^1.6.3",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
@@ -69,11 +70,11 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.18.12",
     "cookie-parser": "^1.4.7",
-    "eslint": "^9.27.0",
+    "eslint": "^9.39.4",
     "helmet": "^8.0.0",
     "jest": "^30.0.3",
     "jest-junit": "^16.0.0",
-    "knip": "^5.43.6",
+    "knip": "^6.17.1",
     "prettier": "^3.1.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
