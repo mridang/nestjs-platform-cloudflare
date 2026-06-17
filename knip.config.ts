@@ -1,4 +1,5 @@
 export default {
-  ignore: ['knip.config.ts'],
+  entry: ['src/index.ts', 'src/adapters/cloudflare-adapter.ts'],
+  includeEntryExports: false,
   ignoreDependencies: [/^@semantic-release\//, /^@cloudflare\/workers-types$/],
 };
