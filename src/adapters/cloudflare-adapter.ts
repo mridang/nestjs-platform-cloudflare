@@ -34,9 +34,7 @@ import {
 
 /** Mirror of Nest's VersionValue (not re-exported from the package root). */
 type VersionValue =
-  | string
-  | typeof VERSION_NEUTRAL
-  | Array<string | typeof VERSION_NEUTRAL>;
+  string | typeof VERSION_NEUTRAL | Array<string | typeof VERSION_NEUTRAL>;
 
 /**
  * Minimal shape of a `URLPattern` instance for `tsc`. `URLPattern` is a native
@@ -620,8 +618,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /** Custom 404 handler, if registered. */
   private notFoundHandler:
-    | ((req: CloudflareRequest, res: CloudflareResponse) => void)
-    | undefined;
+    ((req: CloudflareRequest, res: CloudflareResponse) => void) | undefined;
 
   /**
    * @param instance Accepted for parity; there is no underlying framework
@@ -1470,8 +1467,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    */
   public listen(_port: unknown, ...args: readonly unknown[]): unknown {
     const callback = args.find((arg) => typeof arg === 'function') as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     callback?.();
     return this.httpServer;
   }
