@@ -2002,13 +2002,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public applyVersionFilter(
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest passes an untyped Function handler
-    handler: Function,
+    handler: Handler,
     version: VersionValue,
     versioningOptions: VersioningOptions,
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- the returned handler is an untyped Function
   ): (req: CloudflareRequest, res: CloudflareResponse, next: Next) => Function {
-    const run = handler as Handler;
+    const run = handler;
     return (req, res, next) => {
       const requested = CloudflareAdapter.resolveRequestedVersion(
         req,
