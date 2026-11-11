@@ -34,9 +34,7 @@ import {
 
 /** Mirror of Nest's VersionValue (not re-exported from the package root). */
 type VersionValue =
-  | string
-  | typeof VERSION_NEUTRAL
-  | Array<string | typeof VERSION_NEUTRAL>;
+  string | typeof VERSION_NEUTRAL | Array<string | typeof VERSION_NEUTRAL>;
 
 /**
  * Minimal shape of a `URLPattern` instance for `tsc`. `URLPattern` is a native
@@ -48,15 +46,16 @@ type VersionValue =
 interface URLPatternInstance {
   /**
    * Match a URL and return its captured path groups, or `null` on no match.
-   * @param input The URL (or URL string) to match.
+   * @param input - The URL (or URL string) to match.
    * @returns The match result, or `null` if the pattern does not match.
    */
   exec(
     input: string | URL,
   ): { pathname: { groups: Record<string, string | undefined> } } | null;
+
   /**
    * Test whether a URL matches the pattern.
-   * @param input The URL (or URL string) to test.
+   * @param input - The URL (or URL string) to test.
    * @returns `true` if the pattern matches.
    */
   test(input: string | URL): boolean;
@@ -121,9 +120,10 @@ export interface CloudflareRequest {
   baseUrl?: string;
   /** Request path without the query string. */
   path?: string;
+
   /**
    * Read a request header value by name (case-insensitive).
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `null` if absent.
    */
   get(name: string): string | null;
@@ -142,31 +142,35 @@ export interface CloudflareResponse {
   /** Buffered response headers. */
   headers: Headers;
   /** Buffered response body, or `null` for an empty body. */
-  // eslint-disable-next-line no-undef
+
   body?: BodyInit | null;
   /** Whether the headers have been committed. */
   headersSent: boolean;
   /** Whether a response body has been produced. */
   sent: boolean;
+
   /**
    * Set the status code.
-   * @param code HTTP status code.
+   * @param code - HTTP status code.
    * @returns This response, for chaining.
    */
   status(code: number): this;
+
   /**
    * Set a header value, replacing any existing value.
-   * @param name Header name.
-   * @param value Header value.
+   * @param name - Header name.
+   * @param value - Header value.
    * @returns This response, for chaining.
    */
   setHeader(name: string, value: string): this;
+
   /**
    * Read a header value.
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `null` if absent.
    */
   getHeader(name: string): string | null;
+
   /**
    * Return the `Set-Cookie` header as the array Express/Node middleware expect.
    * Set-Cookie values legitimately contain commas (e.g. `Expires=Wed, 01 ...`),
@@ -175,51 +179,58 @@ export interface CloudflareResponse {
    * @returns The accumulated `Set-Cookie` values.
    */
   getSetCookie(): string[];
+
   /**
    * Remove a header.
-   * @param name Header name.
+   * @param name - Header name.
    * @returns This response, for chaining.
    */
   removeHeader(name: string): this;
+
   /**
    * Buffer a response body, JSON-encoding plain objects and settling the
    * response.
-   * @param body Body to send.
+   * @param body - Body to send.
    */
-  // eslint-disable-next-line no-undef
+
   send(body?: BodyInit | object | null): void;
+
   /**
    * Buffer a JSON response body and settle the response.
-   * @param body Value to serialize as JSON.
+   * @param body - Value to serialize as JSON.
    */
   json(body: unknown): void;
+
   /**
    * Buffer a redirect response and settle.
-   * @param url Target location.
-   * @param statusCode Redirect status code (defaults to 302).
+   * @param url - Target location.
+   * @param statusCode - Redirect status code (defaults to 302).
    */
   redirect(url: string, statusCode?: number): void;
+
   /**
    * End the response, optionally with a final body, and settle.
-   * @param body Optional final body.
+   * @param body - Optional final body.
    */
-  // eslint-disable-next-line no-undef
+
   end(body?: BodyInit | null): void;
+
   /**
    * Append a `Set-Cookie` header serialized from the name/value and attributes.
    * Mirrors Express's `res.cookie()` so `@Res()` controllers can set cookies on
    * the native response without the Express compatibility wrapper.
-   * @param name Cookie name.
-   * @param value Cookie value.
-   * @param options Cookie attributes (maxAge, httpOnly, secure, sameSite, ...).
+   * @param name - Cookie name.
+   * @param value - Cookie value.
+   * @param options - Cookie attributes (maxAge, httpOnly, secure, sameSite, ...).
    * @returns This response, for chaining.
    */
   cookie(name: string, value: string, options?: CookieOptions): this;
+
   /**
    * Append an expired `Set-Cookie` header that clears the named cookie. Mirrors
    * Express's `res.clearCookie()`.
-   * @param name Cookie name.
-   * @param options Cookie attributes (path, domain, ...) used to scope the clear.
+   * @param name - Cookie name.
+   * @param options - Cookie attributes (path, domain, ...) used to scope the clear.
    * @returns This response, for chaining.
    */
   clearCookie(name: string, options?: CookieOptions): this;
@@ -249,10 +260,9 @@ export interface CookieOptions {
  * Serialize a cookie name/value pair plus attributes into a `Set-Cookie` value.
  * Matches the Express compatibility layer's serializer so cookies set via the
  * native response and via wrapped Express middleware are byte-identical.
- *
- * @param name Cookie name.
- * @param value Cookie value.
- * @param options Cookie attributes.
+ * @param name - Cookie name.
+ * @param value - Cookie value.
+ * @param options - Cookie attributes.
  * @returns The serialized `Set-Cookie` header value.
  */
 function serializeSetCookie(
@@ -295,8 +305,7 @@ function serializeSetCookie(
  * through untouched, so the object remains a fully functional `Headers` for
  * Nest internals and the compat layers while letting unmodified controllers
  * that read `req.headers[name]` (the standard Express idiom) keep working.
- *
- * @param headers The native request headers.
+ * @param headers - The native request headers.
  * @returns A `Headers`-compatible proxy supporting bracket access.
  */
 function headerProxy(headers: Headers): Headers {
@@ -334,8 +343,7 @@ interface StreamableFileLike {
  * Detect Nest's `StreamableFile` structurally (no import to keep the adapter
  * decoupled from `@nestjs/common`'s runtime), so controllers that return a
  * StreamableFile stream their bytes instead of being JSON-serialized.
- *
- * @param body The value a controller returned.
+ * @param body - The value a controller returned.
  * @returns The value typed as a StreamableFile, or `null` if it is not one.
  */
 function asStreamableFile(body: unknown): StreamableFileLike | null {
@@ -355,8 +363,7 @@ function asStreamableFile(body: unknown): StreamableFileLike | null {
  * runtime can stream it as a response body. Uses the native `Readable.toWeb`
  * when present (Node/`nodejs_compat`), and otherwise pumps the Node stream's
  * `data`/`end`/`error` events into a Web stream manually.
- *
- * @param nodeStream The Node Readable stream to convert.
+ * @param nodeStream - The Node Readable stream to convert.
  * @returns A Web `ReadableStream` over the same bytes.
  */
 function nodeStreamToWeb(nodeStream: {
@@ -463,7 +470,6 @@ const EMPTY = Object.freeze({}) as Record<string, never>;
 
 /**
  * Create a fresh, mutable empty record. Use for any field exposed to user code.
- *
  * @returns A new empty object.
  */
 function emptyRecord<T>(): Record<string, T> {
@@ -484,8 +490,7 @@ const ALL_VERBS = [
 /**
  * Whether a route path is parametric (and so must be matched via `URLPattern`)
  * rather than a static path eligible for O(1) exact lookup.
- *
- * @param path The route path to classify.
+ * @param path - The route path to classify.
  * @returns `true` if the path contains a param, wildcard, or group.
  */
 function isDynamic(path: string): boolean {
@@ -504,19 +509,19 @@ function isDynamic(path: string): boolean {
  *
  * - `{*name}` and `*name` -> `:name*` (named wildcard, captured under `name`)
  * - `{ ... }` optional wrappers are unwrapped
- * - bare `*` / `(.*)` -> `*` (URLPattern wildcard, captured under `0`)
+ * - bare `*` / `(.*)` -> `*` (URLPattern wildcard, captured under `0`).
  */
 function normalizePathPattern(path: string): string {
   return (
     path
       // `{*name}` -> `:name*`
-      .replace(/{\*(\w+)}/g, ':$1*')
+      .replaceAll(/{\*(\w+)}/g, ':$1*')
       // `*name` -> `:name*`
-      .replace(/\*(\w+)/g, ':$1*')
+      .replaceAll(/\*(\w+)/g, ':$1*')
       // `(.*)` -> `*`
-      .replace(/\(\.\*\)/g, '*')
+      .replaceAll('(.*)', '*')
       // strip any remaining `{ }` wrappers around segments
-      .replace(/{([^}]*)}/g, '$1')
+      .replaceAll(/{([^}]*)}/g, '$1')
   );
 }
 
@@ -543,8 +548,7 @@ function parseQuery(
 
 /**
  * Parse a `Cookie` request header into a name/value record, URL-decoding values.
- *
- * @param header The raw `Cookie` header value, or `null` if absent.
+ * @param header - The raw `Cookie` header value, or `null` if absent.
  * @returns A record of cookie names to decoded values.
  */
 function parseCookies(header: string | null): Record<string, string> {
@@ -578,7 +582,7 @@ function parseCookies(header: string | null): Record<string, string> {
  * Because Workers invoke the adapter through a `fetch` export rather than by
  * binding a port, {@link CloudflareAdapter.listen} does not start a server —
  * wire the public {@link CloudflareAdapter.handle} entry point into your
- * Worker's `fetch` export instead:
+ * Worker's `fetch` export instead:.
  *
  * ```ts
  * const app = await NestFactory.create(AppModule, new CloudflareAdapter());
@@ -620,12 +624,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /** Custom 404 handler, if registered. */
   private notFoundHandler:
-    | ((req: CloudflareRequest, res: CloudflareResponse) => void)
-    | undefined;
+    ((req: CloudflareRequest, res: CloudflareResponse) => void) | undefined;
 
   /**
-   * @param instance Accepted for parity; there is no underlying framework
-   *   instance on Workers, so a placeholder object is passed to the base class.
+   * @param instance - Accepted for parity; there is no underlying framework
+   * instance on Workers, so a placeholder object is passed to the base class.
    */
   constructor(instance?: unknown) {
     super(instance ?? {});
@@ -633,7 +636,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Create a new adapter instance.
-   *
    * @returns A fresh {@link CloudflareAdapter}.
    */
   public static create(): CloudflareAdapter {
@@ -642,8 +644,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `GET` route. Nest calls this during init as `(path, handler)`.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public get(...args: readonly unknown[]): void {
     this.register('GET', args);
@@ -651,8 +652,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `POST` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public post(...args: readonly unknown[]): void {
     this.register('POST', args);
@@ -660,8 +660,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `PUT` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public put(...args: readonly unknown[]): void {
     this.register('PUT', args);
@@ -669,8 +668,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `DELETE` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public delete(...args: readonly unknown[]): void {
     this.register('DELETE', args);
@@ -678,8 +676,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `PATCH` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public patch(...args: readonly unknown[]): void {
     this.register('PATCH', args);
@@ -687,8 +684,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register an `OPTIONS` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public options(...args: readonly unknown[]): void {
     this.register('OPTIONS', args);
@@ -696,8 +692,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `HEAD` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public head(...args: readonly unknown[]): void {
     this.register('HEAD', args);
@@ -705,8 +700,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a `SEARCH` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public search(...args: readonly unknown[]): void {
     this.register('SEARCH', args);
@@ -714,8 +708,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `PROPFIND` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public propfind(...args: readonly unknown[]): void {
     this.register('PROPFIND', args);
@@ -723,8 +716,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `PROPPATCH` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public proppatch(...args: readonly unknown[]): void {
     this.register('PROPPATCH', args);
@@ -732,8 +724,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `MKCOL` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public mkcol(...args: readonly unknown[]): void {
     this.register('MKCOL', args);
@@ -741,8 +732,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `COPY` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public copy(...args: readonly unknown[]): void {
     this.register('COPY', args);
@@ -750,8 +740,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `MOVE` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public move(...args: readonly unknown[]): void {
     this.register('MOVE', args);
@@ -759,8 +748,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `LOCK` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public lock(...args: readonly unknown[]): void {
     this.register('LOCK', args);
@@ -768,8 +756,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a WebDAV `UNLOCK` route.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public unlock(...args: readonly unknown[]): void {
     this.register('UNLOCK', args);
@@ -777,8 +764,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register the same handler under every supported HTTP verb.
-   *
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   public all(...args: readonly unknown[]): void {
     ALL_VERBS.forEach((verb) => this.register(verb, args));
@@ -786,9 +772,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Mount global or path-scoped middleware (backs Nest's `app.use()`).
-   *
-   * @param args Either `(middleware)` or `(path, middleware)`; non-function
-   *   middleware are ignored.
+   * @param args - Either `(middleware)` or `(path, middleware)`; non-function
+   * middleware are ignored.
    */
   public use(...args: readonly unknown[]): void {
     const hasPath = args.length >= 2;
@@ -808,8 +793,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * middleware, the matched handler chain and any error/not-found handlers,
    * then serialize the buffered result into a native Web `Response`. Wire this
    * into a Worker's `fetch` export.
-   *
-   * @param request The incoming Web `Request`.
+   * @param request - The incoming Web `Request`.
    * @returns The Web `Response` to return from the Worker.
    */
   public async handle(request: Request): Promise<Response> {
@@ -879,7 +863,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Wraps Express middleware so it runs against the adapter's request/response
    * objects, letting you reuse existing Express middleware packages such as
    * `helmet()` or `cookie-parser`.
-   *
    * @example
    * ```ts
    * import helmet from 'helmet';
@@ -911,7 +894,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    *
    * Some Express middleware require an Express app instance; this returns a
    * compatible shim that routes registrations through the adapter.
-   *
    * @example
    * ```ts
    * const adapter = new CloudflareAdapter();
@@ -996,7 +978,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Register a Fastify plugin with the Cloudflare adapter.
-   *
    * @example
    * ```ts
    * await adapter.registerFastifyPlugin(myPlugin, { option: true });
@@ -1014,7 +995,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Use a Fastify hook with the Cloudflare adapter.
    *
    * Wraps a Fastify-style hook so it runs in the adapter's middleware chain.
-   *
    * @example
    * ```ts
    * adapter.useFastifyHook('onRequest', async (request, reply) => {
@@ -1029,7 +1009,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Get a Fastify-like instance for plugins/hooks that require it.
-   *
    * @example
    * ```ts
    * const fastify = adapter.getFastifyInstance();
@@ -1112,19 +1091,19 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
             const hooks = [
               ...(opts.onRequest
-                ? Array.isArray(opts.onRequest)
+                ? (Array.isArray(opts.onRequest)
                   ? opts.onRequest
-                  : [opts.onRequest]
+                  : [opts.onRequest])
                 : []),
               ...(opts.preValidation
-                ? Array.isArray(opts.preValidation)
+                ? (Array.isArray(opts.preValidation)
                   ? opts.preValidation
-                  : [opts.preValidation]
+                  : [opts.preValidation])
                 : []),
               ...(opts.preHandler
-                ? Array.isArray(opts.preHandler)
+                ? (Array.isArray(opts.preHandler)
                   ? opts.preHandler
-                  : [opts.preHandler]
+                  : [opts.preHandler])
                 : []),
             ];
 
@@ -1163,29 +1142,37 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           };
 
           switch (method.toUpperCase()) {
-            case 'GET':
+            case 'GET': {
               self.get(opts.url, handler);
               break;
-            case 'POST':
+            }
+            case 'POST': {
               self.post(opts.url, handler);
               break;
-            case 'PUT':
+            }
+            case 'PUT': {
               self.put(opts.url, handler);
               break;
-            case 'DELETE':
+            }
+            case 'DELETE': {
               self.delete(opts.url, handler);
               break;
-            case 'PATCH':
+            }
+            case 'PATCH': {
               self.patch(opts.url, handler);
               break;
-            case 'OPTIONS':
+            }
+            case 'OPTIONS': {
               self.options(opts.url, handler);
               break;
-            case 'HEAD':
+            }
+            case 'HEAD': {
               self.head(opts.url, handler);
               break;
-            default:
+            }
+            default: {
               self.all(opts.url, handler);
+            }
           }
         });
 
@@ -1266,10 +1253,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Write a body onto the response (Nest's primary reply path), inferring the
    * `Content-Type` from the body's kind, then settle the response.
-   *
-   * @param res The adapter response.
-   * @param body The body to send.
-   * @param statusCode Optional status code to set.
+   * @param res - The adapter response.
+   * @param body - The body to send.
+   * @param statusCode - Optional status code to set.
    */
   public reply(
     res: CloudflareResponse,
@@ -1296,7 +1282,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         res.headers.set('content-length', String(fileHeaders.length));
       }
       const nodeStream = streamable.getStream();
-      // eslint-disable-next-line no-undef
+
       res.body = nodeStreamToWeb(nodeStream) as BodyInit;
       res.sent = true;
       res.headersSent = true;
@@ -1315,7 +1301,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       body instanceof ArrayBuffer ||
       body instanceof ReadableStream
     ) {
-      // eslint-disable-next-line no-undef
       res.body = body as BodyInit;
     } else {
       res.body = JSON.stringify(body);
@@ -1330,9 +1315,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Set the response status code.
-   *
-   * @param res The adapter response.
-   * @param statusCode HTTP status code.
+   * @param res - The adapter response.
+   * @param statusCode - HTTP status code.
    * @returns The same response, for chaining.
    */
   public status(
@@ -1345,10 +1329,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Buffer a redirect response and settle it.
-   *
-   * @param res The adapter response.
-   * @param statusCode Redirect status code (defaults to 302 when falsy).
-   * @param url Target location.
+   * @param res - The adapter response.
+   * @param statusCode - Redirect status code (defaults to 302 when falsy).
+   * @param url - Target location.
    */
   public redirect(
     res: CloudflareResponse,
@@ -1364,9 +1347,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * End the response, optionally with a final message.
-   *
-   * @param res The adapter response.
-   * @param message Optional final body.
+   * @param res - The adapter response.
+   * @param message - Optional final body.
    */
   public end(res: CloudflareResponse, message?: string): void {
     res.end(message);
@@ -1374,10 +1356,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Set a response header, replacing any existing value.
-   *
-   * @param res The adapter response.
-   * @param name Header name.
-   * @param value Header value.
+   * @param res - The adapter response.
+   * @param name - Header name.
+   * @param value - Header value.
    */
   public setHeader(res: CloudflareResponse, name: string, value: string): void {
     res.headers.set(name, String(value));
@@ -1385,9 +1366,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Read a response header value.
-   *
-   * @param res The adapter response.
-   * @param name Header name.
+   * @param res - The adapter response.
+   * @param name - Header name.
    * @returns The header value, or `null` if absent.
    */
   public getHeader(res: CloudflareResponse, name: string): string | null {
@@ -1396,10 +1376,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Append a value to a response header without replacing existing values.
-   *
-   * @param res The adapter response.
-   * @param name Header name.
-   * @param value Header value to append.
+   * @param res - The adapter response.
+   * @param name - Header name.
+   * @param value - Header value to append.
    */
   public appendHeader(
     res: CloudflareResponse,
@@ -1411,8 +1390,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Whether the response has already been sent.
-   *
-   * @param res The adapter response.
+   * @param res - The adapter response.
    * @returns `true` once a body has been produced.
    */
   public isHeadersSent(res: CloudflareResponse): boolean {
@@ -1421,8 +1399,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Read the request's HTTP method.
-   *
-   * @param req The adapter request.
+   * @param req - The adapter request.
    * @returns The HTTP method.
    */
   public getRequestMethod(req: CloudflareRequest): string {
@@ -1431,8 +1408,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Read the request URL (path plus query string).
-   *
-   * @param req The adapter request.
+   * @param req - The adapter request.
    * @returns The request URL.
    */
   public getRequestUrl(req: CloudflareRequest): string {
@@ -1441,8 +1417,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Read the request host name, falling back to the `Host` header.
-   *
-   * @param req The adapter request.
+   * @param req - The adapter request.
    * @returns The host name, or an empty string if unknown.
    */
   public getRequestHostname(req: CloudflareRequest): string {
@@ -1463,22 +1438,20 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   }
 
   /**
-   * On Cloudflare Workers there is no port to bind. {@link listen} therefore
+   * On Cloudflare Workers there is no port to bind. {@link listen} Therefore
    * does NOT start a server — the Worker runtime invokes the adapter through a
    * `fetch` export instead. It simply records that it was called and fires the
    * optional callback so Nest's bootstrap completes.
    */
   public listen(_port: unknown, ...args: readonly unknown[]): unknown {
     const callback = args.find((arg) => typeof arg === 'function') as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     callback?.();
     return this.httpServer;
   }
 
   /**
    * Get the server handle.
-   *
    * @returns The server handle, or `undefined` before init.
    */
   public getHttpServer(): CloudflareHttpServer | undefined {
@@ -1487,8 +1460,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Replace the server handle.
-   *
-   * @param server The handle to use.
+   * @param server - The handle to use.
    */
   public setHttpServer(server: CloudflareHttpServer): void {
     this.server = server;
@@ -1497,7 +1469,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Tear down the adapter. A no-op on Workers, as there is nothing to close.
-   *
    * @returns An already-resolved promise.
    */
   public close(): Promise<void> {
@@ -1516,9 +1487,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Provide the factory Nest uses to register route-scoped middleware. The
    * returned `(path, callback)` registrar records each middleware against a
    * path matcher; the chain runs in {@link handle} before routing.
-   *
-   * @param _method The HTTP method the middleware is scoped to (unused — the
-   *   adapter matches middleware purely on path).
+   * @param _method - The HTTP method the middleware is scoped to (unused — the
+   * adapter matches middleware purely on path).
    * @returns A registrar that adds a middleware for the given path.
    */
   public createMiddlewareFactory(
@@ -1538,9 +1508,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Enable CORS handling for the application. Preflight `OPTIONS` requests are
    * answered automatically and the configured headers are applied to matching
    * responses.
-   *
-   * @param options CORS configuration; a permissive default is used when
-   *   omitted.
+   * @param options - CORS configuration; a permissive default is used when
+   * omitted.
    */
   public enableCors(options?: CloudflareCorsOptions): void {
     this.cors = options ?? {};
@@ -1551,11 +1520,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * the wrapped handler when the request's resolved version matches `version`,
    * otherwise calls `next()` to fall through to the next versioned handler
    * registered on the same route.
-   *
-   * @param handler The route handler to guard.
-   * @param version The version(s) this handler serves — a string, an array, or
-   *   `VERSION_NEUTRAL`.
-   * @param versioningOptions The active versioning strategy.
+   * @param handler - The route handler to guard.
+   * @param version - The version(s) this handler serves — a string, an array, or
+   * `VERSION_NEUTRAL`.
+   * @param versioningOptions - The active versioning strategy.
    * @returns A version-aware handler suitable for the route chain.
    */
   public applyVersionFilter(
@@ -1607,7 +1575,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Unsupported on Cloudflare Workers. Server-side template rendering has no
    * platform equivalent; controllers should return strings or `Response`
    * objects rather than render a view.
-   *
    * @throws Always — view rendering is not supported.
    */
   public render(): never {
@@ -1617,8 +1584,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Register a custom handler invoked when a request throws and no Nest
    * exception filter has already produced a response.
-   *
-   * @param handler Receives the thrown error and the request/response pair.
+   * @param handler - Receives the thrown error and the request/response pair.
    */
   public setErrorHandler(
     handler: (
@@ -1633,8 +1599,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Register a custom handler invoked when no registered route matches a
    * request, in place of the default JSON 404.
-   *
-   * @param handler Receives the request/response pair.
+   * @param handler - Receives the request/response pair.
    */
   public setNotFoundHandler(
     handler: (req: CloudflareRequest, res: CloudflareResponse) => void,
@@ -1644,7 +1609,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Identify this adapter to Nest core.
-   *
    * @returns The adapter type tag, `'fetch'`.
    */
   public getType(): string {
@@ -1653,8 +1617,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Get the route bucket for a method, creating it on first use.
-   *
-   * @param method HTTP method.
+   * @param method - HTTP method.
    * @returns The bucket holding that method's routes.
    */
   private bucketFor(method: string): Bucket {
@@ -1673,9 +1636,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    *
    * Nest's `AbstractHttpAdapter` types every verb as `(...args)`, so the
    * `(path, handler)` pair is narrowed here once rather than at each call site.
-   *
-   * @param method HTTP method.
-   * @param args The `(path, handler)` pair Nest supplies.
+   * @param method - HTTP method.
+   * @param args - The `(path, handler)` pair Nest supplies.
    */
   private register(method: string, args: readonly unknown[]): void {
     const path = args[0] as string;
@@ -1773,9 +1735,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Match a request to its candidate handler chain, falling back from `HEAD`
    * to the `GET` routes (HEAD requests are served by GET handlers).
-   *
-   * @param method The request's HTTP method.
-   * @param url The parsed request URL.
+   * @param method - The request's HTTP method.
+   * @param url - The parsed request URL.
    * @returns The match, or `null` when no route matches.
    */
   private matchRoute(method: string, url: URL): Match | null {
@@ -1792,9 +1753,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Match a URL within a single method's bucket: an O(1) exact-path lookup
    * first, then the parametric routes in registration order.
-   *
-   * @param method HTTP method whose bucket to search.
-   * @param url The parsed request URL.
+   * @param method - HTTP method whose bucket to search.
+   * @param url - The parsed request URL.
    * @returns The match, or `null` when nothing in the bucket matches.
    */
   private matchInBucket(method: string, url: URL): Match | null {
@@ -1841,10 +1801,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Build the adapter's {@link CloudflareRequest} from a native request,
    * parsing the body, query and cookies and exposing mutable param/query
    * records (never the frozen sentinel).
-   *
-   * @param request The native Web `Request`.
-   * @param url The parsed request URL.
-   * @param params Params from the matched route.
+   * @param request - The native Web `Request`.
+   * @param url - The parsed request URL.
+   * @param params - Params from the matched route.
    * @returns The constructed adapter request.
    */
   private async buildRequest(
@@ -1879,8 +1838,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Natively parse a request body by content type — multipart form data, JSON,
    * URL-encoded form, or raw text — reading the underlying bytes exactly once.
-   *
-   * @param request The native Web `Request`.
+   * @param request - The native Web `Request`.
    * @returns The parsed body, raw bytes (where applicable) and any files.
    */
   private async parseBody(request: Request): Promise<ParsedBody> {
@@ -1941,7 +1899,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Construct a fresh buffered {@link CloudflareResponse}, including the
    * internal `settled` promise that {@link handle} awaits for deferred-settle
    * handlers (e.g. `@Res()` controllers).
-   *
    * @returns The response object plus its `settled` promise.
    */
   private static buildResponse(): BufferedResponse {
@@ -1999,7 +1956,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           }
           res.body = JSON.stringify(body);
         } else {
-          // eslint-disable-next-line no-undef
           res.body = body as BodyInit;
         }
         resolve();
@@ -2050,12 +2006,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Run the middleware whose pattern matches the request path as an
    * error-aware connect chain: a `next(err)` skips forward to the next 4-arg
    * error handler, and the chain ends early once a middleware responds.
-   *
-   * @param req The adapter request.
-   * @param res The adapter response.
-   * @param url The parsed request URL used to select matching middleware.
+   * @param req - The adapter request.
+   * @param res - The adapter response.
+   * @param url - The parsed request URL used to select matching middleware.
    * @returns A promise that resolves when the chain settles, or rejects with an
-   *   unhandled error.
+   * unhandled error.
    */
   private runMiddleware(
     req: CloudflareRequest,
@@ -2078,10 +2033,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         if (index >= chain.length) {
           // Chain exhausted: if an unhandled error is still in flight, surface
           // it; otherwise the chain simply fell through to routing.
-          if (err !== undefined) {
-            reject(err);
-          } else {
+          if (err === undefined) {
             resolve();
+          } else {
+            reject(err);
           }
           return;
         }
@@ -2142,8 +2097,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Build the response to a CORS preflight (`OPTIONS`) request, stamping the
    * allow-origin/methods/headers/credentials and appropriate `Vary` headers.
-   *
-   * @param request The preflight request.
+   * @param request - The preflight request.
    * @returns The preflight `Response`.
    */
   private preflight(request: Request): Response {
@@ -2196,9 +2150,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
   /**
    * Stamp CORS response headers (allow-origin, `Vary`, credentials, exposed
    * headers) onto the buffered response for non-preflight requests.
-   *
-   * @param req The adapter request (used to read the request origin).
-   * @param res The adapter response to write headers onto.
+   * @param req - The adapter request (used to read the request origin).
+   * @param res - The adapter response to write headers onto.
    */
   private applyCors(req: CloudflareRequest, res: CloudflareResponse): void {
     if (!this.cors) {
@@ -2234,10 +2187,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * comes back as a clean 404 WITH CORS headers rather than an opaque CORS
    * failure — matching Express's `cors` middleware, which stamps ACAO before
    * routing.
-   *
-   * @param request The unmatched request.
-   * @param url The parsed request URL.
-   * @param corsRes The CORS-stamped buffered response whose headers to carry.
+   * @param request - The unmatched request.
+   * @param url - The parsed request URL.
+   * @param corsRes - The CORS-stamped buffered response whose headers to carry.
    * @returns The 404 `Response`.
    */
   private notFound(
@@ -2274,12 +2226,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     if (corsRes) {
       corsRes.headers.forEach((value, key) => headers.append(key, value));
     }
-    return new Response(
-      JSON.stringify({
+    return Response.json(
+      {
         statusCode: 404,
         message: `Cannot ${request.method} ${url.pathname}`,
         error: 'Not Found',
-      }),
+      },
       {
         status: 404,
         headers,
@@ -2315,9 +2267,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * rule yields for this request, returning `''` for a deny. Supports string,
    * boolean, RegExp, array and both function styles (value-returning and
    * Nest's callback form).
-   *
-   * @param cors The active CORS options.
-   * @param request The request being answered.
+   * @param cors - The active CORS options.
+   * @param request - The request being answered.
    * @returns The allowed origin, or `''` when denied.
    */
   private static resolveOrigin(
@@ -2357,12 +2308,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           ) => void
         )(requestOrigin, (_err, allow) => {
           resolved =
-            typeof allow === 'string' ? allow : allow ? requestOrigin : '';
+            typeof allow === 'string' ? allow : (allow ? requestOrigin : '');
         });
         return resolved;
       }
       const result = (fn as (o: string) => boolean | string)(requestOrigin);
-      return typeof result === 'string' ? result : result ? requestOrigin : '';
+      return typeof result === 'string' ? result : (result ? requestOrigin : '');
     }
     // Deny by default rather than reflecting `*`, so a misconfigured/unknown
     // origin form cannot silently allow every origin.
@@ -2371,9 +2322,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
 
   /**
    * Copy every header from `from` onto `to` (used to preserve CORS on 404s).
-   *
-   * @param from Source response whose headers to copy, or `undefined`.
-   * @param to Destination response to append the headers onto.
+   * @param from - Source response whose headers to copy, or `undefined`.
+   * @param to - Destination response to append the headers onto.
    */
   private static mergeHeaders(
     from: CloudflareResponse | undefined,
@@ -2389,9 +2339,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * Serialize the buffered {@link CloudflareResponse} into a native Web
    * `Response`, nulling the body where the runtime forbids one (HEAD, and
    * 1xx/204/205/304 statuses).
-   *
-   * @param res The buffered response.
-   * @param method The request method, used to suppress the body for `HEAD`.
+   * @param res - The buffered response.
+   * @param method - The request method, used to suppress the body for `HEAD`.
    * @returns The native `Response`.
    */
   private static toResponse(
@@ -2417,8 +2366,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * given request path. Returns `null` (always-run) for the whole-app forms
    * Nest emits, and otherwise mounts the path as an Express-style PREFIX so
    * `use('/api', mw)` runs for `/api` AND every sub-path (`/api/users`).
-   *
-   * @param path The middleware mount path, or `null` for whole-app middleware.
+   * @param path - The middleware mount path, or `null` for whole-app middleware.
    * @returns The gating pattern, or `null` if the middleware always runs.
    */
   private static middlewarePattern(
@@ -2460,8 +2408,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     options: VersioningOptions,
   ): string | string[] | null {
     switch (options.type) {
-      case VersioningType.HEADER:
+      case VersioningType.HEADER: {
         return req.get(options.header);
+      }
       case VersioningType.MEDIA_TYPE: {
         const param = (req.get('accept') ?? '')
           .split(';')
@@ -2469,22 +2418,23 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           .find((part) => part.startsWith(options.key));
         return param ? param.slice(options.key.length) : null;
       }
-      case VersioningType.CUSTOM:
+      case VersioningType.CUSTOM: {
         return options.extractor(req);
+      }
       case VersioningType.URI:
-      default:
+      default: {
         return null;
+      }
     }
   }
 
   /**
    * Decide whether a handler registered for `version` should serve a request
    * whose resolved version is `requested`.
-   *
-   * @param version The version(s) the handler serves.
-   * @param requested The version resolved from the request, or `null` if the
-   *   request supplied none.
-   * @param options The active versioning strategy.
+   * @param version - The version(s) the handler serves.
+   * @param requested - The version resolved from the request, or `null` if the
+   * request supplied none.
+   * @param options - The active versioning strategy.
    * @returns `true` when the handler matches the requested version.
    */
   private static versionMatches(

@@ -64,85 +64,92 @@ export interface FastifyCompatReply {
 
   /**
    * Set the response status code.
-   * @param statusCode HTTP status code.
+   * @param statusCode - HTTP status code.
    * @returns This reply, for chaining.
    */
   code(statusCode: number): this;
+
   /**
    * Alias for {@link FastifyCompatReply.code}.
-   * @param statusCode HTTP status code.
+   * @param statusCode - HTTP status code.
    * @returns This reply, for chaining.
    */
   status(statusCode: number): this;
 
   /**
    * Set a single response header.
-   * @param key Header name.
-   * @param value Header value.
+   * @param key - Header name.
+   * @param value - Header value.
    * @returns This reply, for chaining.
    */
   header(key: string, value: string | number | boolean): this;
+
   /**
    * Set multiple response headers at once.
-   * @param headers Map of header names to values.
+   * @param headers - Map of header names to values.
    * @returns This reply, for chaining.
    */
   headers(headers: Record<string, string | number | boolean>): this;
+
   /**
    * Read a response header value.
-   * @param key Header name.
+   * @param key - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   getHeader(key: string): string | string[] | undefined;
+
   /**
    * Read all response headers as a plain object.
    * @returns The current response headers.
    */
   getHeaders(): Record<string, string | string[] | undefined>;
+
   /**
    * Remove a response header.
-   * @param key Header name.
+   * @param key - Header name.
    * @returns This reply, for chaining.
    */
   removeHeader(key: string): this;
+
   /**
    * Whether a response header is set.
-   * @param key Header name.
+   * @param key - Header name.
    * @returns `true` if the header is present.
    */
   hasHeader(key: string): boolean;
 
   /**
    * Send the response payload, inferring `Content-Type` from its kind.
-   * @param payload Payload to send.
+   * @param payload - Payload to send.
    * @returns This reply, for chaining.
    */
   send(payload?: unknown): this;
 
   /**
    * Serialize a payload using the active serializer.
-   * @param payload Value to serialize.
+   * @param payload - Value to serialize.
    * @returns The serialized string.
    */
   serialize(payload: unknown): string;
+
   /**
    * Replace the serializer used by {@link FastifyCompatReply.send}.
-   * @param fn New serializer function.
+   * @param fn - New serializer function.
    * @returns This reply, for chaining.
    */
   serializer(fn: (payload: unknown) => string): this;
 
   /**
    * Set the response `Content-Type`.
-   * @param contentType MIME type.
+   * @param contentType - MIME type.
    * @returns This reply, for chaining.
    */
   type(contentType: string): this;
 
   /**
    * Redirect the client to a URL, optionally with a status code.
-   * @param url Target URL (or status code when followed by `url`).
-   * @param statusCode Status code when the first argument is the URL position.
+   * @param url - Target URL (or status code when followed by `url`).
+   * @param statusCode - Status code when the first argument is the URL position.
    * @returns This reply, for chaining.
    */
   redirect(url: string): this;
@@ -150,6 +157,7 @@ export interface FastifyCompatReply {
 
   /** Produce the framework's standard 404 Not Found response. */
   callNotFound(): void;
+
   /**
    * Elapsed time since the reply was created.
    * @returns The response time in milliseconds.
@@ -399,9 +407,10 @@ export interface FastifyLogger {
   trace(msg: string, ...args: unknown[]): void;
   /** Log at the `fatal` level. */
   fatal(msg: string, ...args: unknown[]): void;
+
   /**
    * Create a child logger that prefixes messages with the given bindings.
-   * @param bindings Key/value pairs prepended to each message.
+   * @param bindings - Key/value pairs prepended to each message.
    * @returns A child logger.
    */
   child(bindings: Record<string, unknown>): FastifyLogger;
@@ -412,7 +421,6 @@ let requestIdCounter = 0;
 
 /**
  * Generate a unique-per-process request identifier.
- *
  * @returns A request id of the form `req-<timestamp>-<counter>`.
  */
 function generateRequestId(): string {
@@ -422,8 +430,7 @@ function generateRequestId(): string {
 /**
  * Convert native `Headers` into a plain object keyed by lower-cased header
  * name, collecting repeated headers into arrays.
- *
- * @param headers Native Web `Headers` to convert.
+ * @param headers - Native Web `Headers` to convert.
  * @returns A plain headers object.
  */
 function headersToObject(
@@ -448,8 +455,7 @@ function headersToObject(
 
 /**
  * Build a Fastify-compatible request wrapper over a {@link CloudflareRequest}.
- *
- * @param cfReq The adapter request to wrap.
+ * @param cfReq - The adapter request to wrap.
  * @returns A Fastify-shaped request that reads from `cfReq`.
  */
 export function createFastifyRequest(
@@ -481,8 +487,7 @@ export function createFastifyRequest(
 
 /**
  * Build a Fastify-compatible reply wrapper over a {@link CloudflareResponse}.
- *
- * @param cfRes The adapter response to wrap.
+ * @param cfRes - The adapter response to wrap.
  * @returns A Fastify-shaped reply that writes through to `cfRes`.
  */
 export function createFastifyReply(
@@ -570,7 +575,7 @@ export function createFastifyReply(
         if (!cfRes.getHeader('Content-Type')) {
           cfRes.setHeader('Content-Type', 'application/octet-stream');
         }
-        // eslint-disable-next-line no-undef
+
         cfRes.send(payload as BodyInit);
       } else if (typeof payload === 'object') {
         if (!cfRes.getHeader('Content-Type')) {
@@ -625,8 +630,7 @@ export function createFastifyReply(
 /**
  * Determine whether a hook is the async (Promise-returning, no `done`) style,
  * by inspecting its declared argument count.
- *
- * @param hook The hook to classify.
+ * @param hook - The hook to classify.
  * @returns `true` if the hook is async-style.
  */
 function isAsyncHook(hook: FastifyHook): hook is FastifyHookAsync {
@@ -636,8 +640,7 @@ function isAsyncHook(hook: FastifyHook): hook is FastifyHookAsync {
 /**
  * Wrap a Fastify hook so it runs inside the adapter's middleware chain,
  * supporting both async and `done`-callback hook styles.
- *
- * @param hook The Fastify hook to wrap.
+ * @param hook - The Fastify hook to wrap.
  * @returns A middleware function compatible with the adapter chain.
  */
 export function wrapFastifyHook(
@@ -665,18 +668,18 @@ export function wrapFastifyHook(
         const done: FastifyDoneCallback = (err?: Error) => {
           if (err) {
             reject(err);
-          } else if (!fastifyReply.sent) {
-            next();
+          } else if (fastifyReply.sent) {
             resolve();
           } else {
+            next();
             resolve();
           }
         };
 
         try {
           (hook as FastifyHookCallback)(fastifyReq, fastifyReply, done);
-        } catch (err) {
-          reject(err);
+        } catch (error) {
+          reject(error);
         }
       });
     }
@@ -687,10 +690,9 @@ export function wrapFastifyHook(
  * Run a Fastify plugin against a {@link FastifyLikeInstance}, letting plugins
  * that register hooks or decorators work with the adapter. Supports both
  * async and `done`-callback plugin styles.
- *
- * @param plugin The Fastify plugin to run.
- * @param instance The instance the plugin registers against.
- * @param opts Options passed to the plugin.
+ * @param plugin - The Fastify plugin to run.
+ * @param instance - The instance the plugin registers against.
+ * @param opts - Options passed to the plugin.
  * @returns A promise that resolves once the plugin finishes.
  */
 export function wrapFastifyPlugin<Options = Record<string, unknown>>(
@@ -717,8 +719,8 @@ export function wrapFastifyPlugin<Options = Record<string, unknown>>(
             resolve();
           }
         });
-      } catch (err) {
-        reject(err);
+      } catch (error) {
+        reject(error);
       }
     }
   });
@@ -726,7 +728,6 @@ export function wrapFastifyPlugin<Options = Record<string, unknown>>(
 
 /**
  * Create a simple console-backed logger implementing {@link FastifyLogger}.
- *
  * @returns A logger whose `child()` prefixes messages with its bindings.
  */
 export function createFastifyLogger(): FastifyLogger {

@@ -41,44 +41,50 @@ export interface ExpressCompatRequest {
 
   /**
    * Return a request header value by name (case-insensitive).
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   get(name: string): string | undefined;
+
   /**
    * Alias for {@link ExpressCompatRequest.get}.
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   header(name: string): string | undefined;
+
   /**
    * Test whether the request's `Content-Type` matches the given type(s).
-   * @param type Type or list of types to test against.
+   * @param type - Type or list of types to test against.
    * @returns The matched type, `false` if none match, or `null` if no
-   *   `Content-Type` is present.
+   * `Content-Type` is present.
    */
   is(type: string | string[]): string | false | null;
+
   /**
    * Negotiate the best response type against the `Accept` header.
-   * @param types Candidate types in preference order.
+   * @param types - Candidate types in preference order.
    * @returns The best matching type, or `false` if none are acceptable.
    */
   accepts(...types: string[]): string | false;
+
   /**
    * Negotiate the best encoding against the `Accept-Encoding` header.
-   * @param encodings Candidate encodings in preference order.
+   * @param encodings - Candidate encodings in preference order.
    * @returns The best matching encoding, or `false` if none are acceptable.
    */
   acceptsEncodings(...encodings: string[]): string | false;
+
   /**
    * Negotiate the best charset against the `Accept-Charset` header.
-   * @param charsets Candidate charsets in preference order.
+   * @param charsets - Candidate charsets in preference order.
    * @returns The best matching charset, or `false` if none are acceptable.
    */
   acceptsCharsets(...charsets: string[]): string | false;
+
   /**
    * Negotiate the best language against the `Accept-Language` header.
-   * @param langs Candidate languages in preference order.
+   * @param langs - Candidate languages in preference order.
    * @returns The best matching language, or `false` if none are acceptable.
    */
   acceptsLanguages(...langs: string[]): string | false;
@@ -121,151 +127,165 @@ export interface ExpressCompatResponse {
 
   /**
    * Set the response status code.
-   * @param code HTTP status code.
+   * @param code - HTTP status code.
    * @returns This response, for chaining.
    */
   status(code: number): this;
+
   /**
    * Set the status code and send its standard reason phrase as the body.
-   * @param code HTTP status code.
+   * @param code - HTTP status code.
    * @returns This response, for chaining.
    */
   sendStatus(code: number): this;
 
   /**
    * Set one header, or many headers from an object.
-   * @param field Header name, or a map of header names to values.
-   * @param value Header value when `field` is a string.
+   * @param field - Header name, or a map of header names to values.
+   * @param value - Header value when `field` is a string.
    * @returns This response, for chaining.
    */
   set(field: string, value: string | string[]): this;
   set(field: Record<string, string | string[]>): this;
+
   /**
    * Get or set a header depending on whether `value` is supplied.
-   * @param field Header name.
-   * @param value Value to set; omit to read the current value.
+   * @param field - Header name.
+   * @param value - Value to set; omit to read the current value.
    * @returns This response when setting, or the header value when reading.
    */
   header(
     field: string,
     value?: string | string[],
   ): this | string | string[] | undefined;
+
   /**
    * Read a response header value.
-   * @param field Header name.
+   * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   get(field: string): string | string[] | undefined;
+
   /**
    * Append a value to a header without replacing existing values.
-   * @param field Header name.
-   * @param value Value(s) to append.
+   * @param field - Header name.
+   * @param value - Value(s) to append.
    * @returns This response, for chaining.
    */
   append(field: string, value: string | string[]): this;
 
   /**
    * Node `http.ServerResponse`-style header setter (replace semantics).
-   * @param field Header name.
-   * @param value Header value(s).
+   * @param field - Header name.
+   * @param value - Header value(s).
    */
   setHeader(field: string, value: string | number | string[]): void;
+
   /**
    * Node `http.ServerResponse`-style header getter.
-   * @param field Header name.
+   * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   getHeader(field: string): string | number | string[] | undefined;
+
   /**
    * Node `http.ServerResponse`-style header remover.
-   * @param field Header name.
+   * @param field - Header name.
    */
   removeHeader(field: string): void;
 
   /**
    * Send a response body, inferring `Content-Type` from its kind.
-   * @param body Body to send.
+   * @param body - Body to send.
    * @returns This response, for chaining.
    */
   send(body?: unknown): this;
+
   /**
    * Send a JSON response body.
-   * @param body Value to serialize as JSON.
+   * @param body - Value to serialize as JSON.
    * @returns This response, for chaining.
    */
   json(body?: unknown): this;
+
   /**
    * Send a JSONP response body (currently serialized as plain JSON).
-   * @param body Value to serialize.
+   * @param body - Value to serialize.
    * @returns This response, for chaining.
    */
   jsonp(body?: unknown): this;
+
   /**
    * End the response, optionally writing a final chunk.
-   * @param data Optional final body chunk.
-   * @param encoding Accepted for parity; ignored.
+   * @param data - Optional final body chunk.
+   * @param encoding - Accepted for parity; ignored.
    * @returns This response, for chaining.
    */
   end(data?: unknown, encoding?: string): this;
 
   /**
    * Redirect the client to a URL, optionally with a status code.
-   * @param url Target URL (or status code when followed by `url`).
-   * @param status Status code when the first argument is the URL position.
+   * @param url - Target URL (or status code when followed by `url`).
+   * @param status - Status code when the first argument is the URL position.
    */
   redirect(url: string): void;
   redirect(status: number, url: string): void;
 
   /**
    * Set `Content-Type` from a type name or full MIME type.
-   * @param type Shorthand (e.g. `json`) or a full MIME type.
+   * @param type - Shorthand (e.g. `json`) or a full MIME type.
    * @returns This response, for chaining.
    */
   type(type: string): this;
+
   /**
    * Alias for {@link ExpressCompatResponse.type}.
-   * @param type Shorthand or full MIME type.
+   * @param type - Shorthand or full MIME type.
    * @returns This response, for chaining.
    */
   contentType(type: string): this;
 
   /**
    * Append a `Set-Cookie` header for the given cookie.
-   * @param name Cookie name.
-   * @param value Cookie value.
-   * @param options Cookie attributes.
+   * @param name - Cookie name.
+   * @param value - Cookie value.
+   * @param options - Cookie attributes.
    * @returns This response, for chaining.
    */
   cookie(name: string, value: string, options?: CookieOptions): this;
+
   /**
    * Append a `Set-Cookie` header that expires the named cookie.
-   * @param name Cookie name.
-   * @param options Cookie attributes used when clearing.
+   * @param name - Cookie name.
+   * @param options - Cookie attributes used when clearing.
    * @returns This response, for chaining.
    */
   clearCookie(name: string, options?: CookieOptions): this;
 
   /**
    * Set the `Location` header.
-   * @param url Location URL.
+   * @param url - Location URL.
    * @returns This response, for chaining.
    */
   location(url: string): this;
+
   /**
    * Set the `Link` header from a relation-to-URL map.
-   * @param links Map of link relations to URLs.
+   * @param links - Map of link relations to URLs.
    * @returns This response, for chaining.
    */
   links(links: Record<string, string>): this;
+
   /**
    * Append a field to the `Vary` header.
-   * @param field Header field to vary on.
+   * @param field - Header field to vary on.
    * @returns This response, for chaining.
    */
   vary(field: string): this;
+
   /**
    * Run the content-negotiation branch matching the request's `Accept` header.
-   * @param obj Map of types to handlers, with an optional `default`.
+   * @param obj - Map of types to handlers, with an optional `default`.
    * @returns This response, for chaining.
    */
   format(obj: Record<string, () => void>): this;
@@ -362,8 +382,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 /**
  * Convert native `Headers` into a plain object keyed by lower-cased header
  * name, collecting repeated headers into arrays.
- *
- * @param headers Native Web `Headers` to convert.
+ * @param headers - Native Web `Headers` to convert.
  * @returns A plain headers object.
  */
 function headersToObject(
@@ -388,9 +407,8 @@ function headersToObject(
 /**
  * Parse an `Accept`-family header and pick the best match among candidate
  * types, honouring `q` weights and `*`/`type/*` wildcards.
- *
- * @param acceptHeader The raw header value, or `undefined` if absent.
- * @param types Candidate types in caller preference order.
+ * @param acceptHeader - The raw header value, or `undefined` if absent.
+ * @param types - Candidate types in caller preference order.
  * @returns The best matching type, or `false` if none are acceptable.
  */
 function parseAccept(
@@ -409,7 +427,7 @@ function parseAccept(
       params.forEach((param) => {
         const [key, value] = param.trim().split('=');
         if (key === 'q') {
-          quality = parseFloat(value) || 1;
+          quality = Number.parseFloat(value) || 1;
         }
       });
       return { type: type.trim(), quality };
@@ -434,10 +452,9 @@ function parseAccept(
 
 /**
  * Serialize a cookie name/value pair plus attributes into a `Set-Cookie` value.
- *
- * @param name Cookie name.
- * @param value Cookie value.
- * @param options Cookie attributes.
+ * @param name - Cookie name.
+ * @param value - Cookie value.
+ * @param options - Cookie attributes.
  * @returns The serialized `Set-Cookie` header value.
  */
 function serializeCookie(
@@ -453,11 +470,7 @@ function serializeCookie(
   if (options.domain) {
     cookie += `; Domain=${options.domain}`;
   }
-  if (options.path) {
-    cookie += `; Path=${options.path}`;
-  } else {
-    cookie += '; Path=/';
-  }
+  cookie += options.path ? `; Path=${options.path}` : '; Path=/';
   if (options.expires) {
     cookie += `; Expires=${options.expires.toUTCString()}`;
   }
@@ -468,13 +481,12 @@ function serializeCookie(
     cookie += '; Secure';
   }
   if (options.sameSite) {
-    if (options.sameSite === true) {
-      cookie += '; SameSite=Strict';
-    } else {
-      cookie += `; SameSite=${
-        options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
-      }`;
-    }
+    cookie +=
+      options.sameSite === true
+        ? '; SameSite=Strict'
+        : `; SameSite=${
+            options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
+          }`;
   }
 
   return cookie;
@@ -482,8 +494,7 @@ function serializeCookie(
 
 /**
  * Build an Express-compatible request wrapper over a {@link CloudflareRequest}.
- *
- * @param cfReq The adapter request to wrap.
+ * @param cfReq - The adapter request to wrap.
  * @returns An Express-shaped request that reads from `cfReq`.
  */
 export function createExpressRequest(
@@ -582,6 +593,8 @@ export function createExpressRequest(
         langs,
       );
     },
+    fresh: false,
+    stale: true,
   };
 
   // Freshness must be computed by comparing the request's conditional headers
@@ -590,16 +603,13 @@ export function createExpressRequest(
   // response validators to compare against here, so use Express's safe default
   // (no validators compared => not fresh) rather than deriving truthiness from
   // request header presence, which wrongly 304s every conditional GET.
-  req.fresh = false;
-  req.stale = true;
 
   return req;
 }
 
 /**
  * Build an Express-compatible response wrapper over a {@link CloudflareResponse}.
- *
- * @param cfRes The adapter response to wrap.
+ * @param cfRes - The adapter response to wrap.
  * @returns An Express-shaped response that writes through to `cfRes`.
  */
 export function createExpressResponse(
@@ -733,7 +743,7 @@ export function createExpressResponse(
         if (!cfRes.getHeader('Content-Type')) {
           cfRes.setHeader('Content-Type', 'application/octet-stream');
         }
-        // eslint-disable-next-line no-undef
+
         cfRes.send(body as unknown as BodyInit);
       } else if (typeof body === 'object') {
         return this.json(body);
@@ -755,10 +765,10 @@ export function createExpressResponse(
     },
 
     end(data?: unknown) {
-      if (data !== undefined) {
-        cfRes.end(typeof data === 'string' ? data : JSON.stringify(data));
-      } else {
+      if (data === undefined) {
         cfRes.end();
+      } else {
+        cfRes.end(typeof data === 'string' ? data : JSON.stringify(data));
       }
       return this;
     },
@@ -867,8 +877,7 @@ export type WrappedExpressMiddleware = ((
  * error is forwarded down the chain (the chain locates the next 4-arg error
  * handler). 4-arg error-handling middleware are skipped on the normal path and
  * only run when an error reaches them, receiving the propagated error.
- *
- * @param middleware The Express middleware (3-arg) or error handler (4-arg).
+ * @param middleware - The Express middleware (3-arg) or error handler (4-arg).
  * @returns A wrapped function the adapter's middleware chain can invoke.
  */
 export function wrapExpressMiddleware(
@@ -921,15 +930,15 @@ export function wrapExpressMiddleware(
               // A throw/reject from an error handler is itself an error in
               // flight: forward it down the chain (Express routes it to the
               // next error handler) instead of rejecting the wrapper.
-              .catch((e) => {
-                next(e);
+              .catch((error) => {
+                next(error);
                 resolve();
               });
           } else if (cfRes.sent) {
             resolve();
           }
-        } catch (e) {
-          next(e);
+        } catch (error) {
+          next(error);
           resolve();
         }
         return;
@@ -951,15 +960,15 @@ export function wrapExpressMiddleware(
             // advances to the next downstream error handler, instead of
             // rejecting the wrapper (which would skip straight to the
             // catch-all 500).
-            .catch((err) => {
-              next(err);
+            .catch((error) => {
+              next(error);
               resolve();
             });
         } else if (cfRes.sent) {
           resolve();
         }
-      } catch (err) {
-        next(err);
+      } catch (error) {
+        next(error);
         resolve();
       }
     });
