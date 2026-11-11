@@ -386,7 +386,7 @@ function asStreamableFile(body: unknown): StreamableFileLike | null {
 type NodeStreamLike = { on?: unknown };
 
 /** Byte stream that the Workers runtime can send as a response body. */
-// eslint-disable-next-line n/no-unsupported-features/node-builtins -- ReadableStream is a Workers global; engines floor is Node 22.0
+
 type WebByteStream = ReadableStream<Uint8Array>;
 
 /**
@@ -403,17 +403,16 @@ type WebByteStream = ReadableStream<Uint8Array>;
  * ```
  */
 function nodeStreamToWeb(nodeStream: NodeStreamLike): WebByteStream {
-  const ctor =
-    // eslint-disable-next-line n/no-unsupported-features/node-builtins -- ReadableStream is a Workers global; engines floor is Node 22.0
-    (nodeStream as { constructor?: { toWeb?: (s: unknown) => ReadableStream } })
-      .constructor;
+  const ctor = (
+    nodeStream as { constructor?: { toWeb?: (s: unknown) => ReadableStream } }
+  ).constructor;
   if (ctor && typeof ctor.toWeb === 'function') {
     return ctor.toWeb(nodeStream) as WebByteStream;
   }
   const stream = nodeStream as {
     on(event: string, cb: (arg?: unknown) => void): void;
   };
-  // eslint-disable-next-line n/no-unsupported-features/node-builtins -- ReadableStream is a Workers global; engines floor is Node 22.0
+
   return new ReadableStream<Uint8Array>({
     start(controller) {
       stream.on('data', (chunk) =>
@@ -732,7 +731,6 @@ function isBufferLikeBody(body: unknown): boolean {
   return (
     body instanceof ArrayBuffer ||
     body instanceof Uint8Array ||
-    // eslint-disable-next-line n/no-unsupported-features/node-builtins -- ReadableStream is a Workers global; engines floor is Node 22.0
     body instanceof ReadableStream
   );
 }
@@ -1666,7 +1664,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     } else if (
       body instanceof Uint8Array ||
       body instanceof ArrayBuffer ||
-      // eslint-disable-next-line n/no-unsupported-features/node-builtins -- ReadableStream is a Workers global; engines floor is Node 22.0
       body instanceof ReadableStream
     ) {
       res.body = body as BodyInit;
