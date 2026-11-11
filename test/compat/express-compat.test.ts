@@ -96,6 +96,14 @@ function mockResponse(): CloudflareResponse {
       res.headersSent = true;
       res.body = body ?? null;
     },
+    cookie(name, value) {
+      headers.append('Set-Cookie', `${name}=${value}`);
+      return res;
+    },
+    clearCookie(name) {
+      headers.append('Set-Cookie', `${name}=; Max-Age=0`);
+      return res;
+    },
     settle() {},
   };
   return res;

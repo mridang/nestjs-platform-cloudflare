@@ -4,7 +4,8 @@ import {
   createFastifyReply,
   wrapFastifyHook,
   createFastifyLogger,
-  type FastifyHook,
+  type FastifyHookAsync,
+  type FastifyHookCallback,
 } from '../../src/compat/fastify-compat.js';
 import type {
   CloudflareRequest,
@@ -92,6 +93,14 @@ function mockResponse(): CloudflareResponse {
       res.headersSent = true;
       res.body = body ?? null;
     },
+    cookie(name, value) {
+      headers.append('Set-Cookie', `${name}=${value}`);
+      return res;
+    },
+    clearCookie(name) {
+      headers.append('Set-Cookie', `${name}=; Max-Age=0`);
+      return res;
+    },
     settle() {},
   };
   return res;
@@ -137,7 +146,7 @@ describe('wrapFastifyHook', () => {
     let ran = false;
     let nexted = false;
 
-    const hook: FastifyHook = async (_request, reply) => {
+    const hook: FastifyHookAsync = async (_request, reply) => {
       ran = true;
       reply.header('x-hook', 'async');
     };
@@ -156,7 +165,7 @@ describe('wrapFastifyHook', () => {
     const cfRes = mockResponse();
     let nexted = false;
 
-    const hook: FastifyHook = (_request, reply, done) => {
+    const hook: FastifyHookCallback = (_request, reply, done) => {
       reply.code(403).send({ denied: true });
       done();
     };
