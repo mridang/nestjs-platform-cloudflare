@@ -1956,7 +1956,6 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public createMiddlewareFactory(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars -- parameter kept to match the Nest factory signature
     _method: RequestMethod,
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest passes an untyped Function callback
   ): (path: string, fn: Function) => void {
@@ -2037,9 +2036,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public useStaticAssets(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars -- parameter kept for Nest adapter parity
     _path?: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars -- parameter kept for Nest adapter parity
+
     _options?: CloudflareStaticAssetsOptions,
   ): void {
     // static files are served by the Workers `assets` binding
