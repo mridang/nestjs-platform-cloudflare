@@ -557,6 +557,7 @@ export function createExpressRequest(
       return req.get(name);
     },
 
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's req.is(), which returns string, false or null
     is(type: string | string[]): string | false | null {
       const contentType = cfReq.headers.get('content-type');
       if (!contentType) {
@@ -680,6 +681,7 @@ export function createExpressResponse(
       return res;
     },
 
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's res.header(), a getter when called without a value and a chainable setter otherwise
     header(
       field: string,
       value?: string | string[],
@@ -714,7 +716,8 @@ export function createExpressResponse(
       }
     },
 
-    getHeader(field: string) {
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's getHeader, which returns string, string[] or undefined
+    getHeader(field: string): OptionalHeaderValue {
       if (field.toLowerCase() === 'set-cookie') {
         // Node/Express return Set-Cookie as string[]. Set-Cookie values contain
         // commas (Expires=Wed, 01 ...), so a comma-joined string is unparseable.

@@ -537,7 +537,8 @@ export function createFastifyReply(
       return reply;
     },
 
-    getHeader(key: string) {
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Fastify's getHeader, which returns string, string[] or undefined
+    getHeader(key: string): OptionalHeaderValue {
       if (key.toLowerCase() === 'set-cookie') {
         // Set-Cookie values contain commas; return the array form, never join.
         const cookies = cfRes.getSetCookie();
@@ -642,7 +643,7 @@ export function createFastifyReply(
  * @param hook - The hook to classify.
  * @returns `true` if the hook is async-style.
  */
-function isAsyncHook(hook: FastifyHook): hook is FastifyHookAsync {
+export function isAsyncHook(hook: FastifyHook): hook is FastifyHookAsync {
   return hook.length <= 2;
 }
 
@@ -667,22 +668,18 @@ export function wrapFastifyHook(
     const fastifyReq = createFastifyRequest(cfReq);
     const fastifyReply = createFastifyReply(cfRes);
 
+    let shouldContinue: boolean;
     if (isAsyncHook(hook)) {
       await hook(fastifyReq, fastifyReply);
-      if (!fastifyReply.sent) {
-        next();
-      }
+      shouldContinue = !fastifyReply.sent;
     } else {
-      await new Promise<void>((resolve, reject) => {
+      shouldContinue = await new Promise<boolean>((resolve, reject) => {
         const done: FastifyDoneCallback = (err?: Error) => {
           if (err) {
             reject(err);
-          } else if (fastifyReply.sent) {
-            resolve();
-          } else {
-            next();
-            resolve();
+            return;
           }
+          resolve(!fastifyReply.sent);
         };
 
         try {
@@ -692,6 +689,10 @@ export function wrapFastifyHook(
         }
       });
     }
+    if (!shouldContinue) {
+      return;
+    }
+    next();
   };
 }
 
@@ -721,6 +722,7 @@ export function wrapFastifyPlugin<Options = Record<string, unknown>>(
     } else {
       // Callback plugin
       try {
+        // eslint-disable-next-line promise/prefer-await-to-callbacks -- Fastify's callback plugin style requires a done callback
         (plugin as FastifyPlugin<Options>)(instance, opts, (err?: Error) => {
           if (err) {
             reject(err);

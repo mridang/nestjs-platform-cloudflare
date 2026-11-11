@@ -173,8 +173,9 @@ describe('createExpressResponse', () => {
   it('set() with an array REPLACES rather than appends (Vary)', () => {
     const cfRes = mockResponse();
     const res = createExpressResponse(cfRes);
-    res.set('Vary', ['Accept']);
-    res.set('Vary', ['Origin']);
+    const setVary = (values: string[]) => res.set('Vary', values);
+    setVary(['Accept']);
+    setVary(['Origin']);
     expect(cfRes.getHeader('Vary')).toBe('Origin');
   });
 
@@ -323,7 +324,7 @@ describe('wrapExpressMiddleware', () => {
     // propagated error (4th arg) and resolve once the response is produced,
     // rather than hanging.
     const errorHandler: ExpressErrorMiddleware = (err, _req, res, next) => {
-      void next; // declared only to mark this as a 4-arg error handler
+      expect(next).toBeInstanceOf(Function);
       seenErr = err;
       res.status(500).json({ caught: (err as Error).message });
     };
@@ -388,7 +389,7 @@ describe('wrapExpressMiddleware', () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
     const rethrow: ExpressErrorMiddleware = (_err, _req, _res, next) => {
-      void next;
+      expect(next).toBeInstanceOf(Function);
       throw new Error('rethrown');
     };
 
@@ -410,14 +411,14 @@ describe('wrapExpressMiddleware', () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
     const errorHandler: ExpressErrorMiddleware = async (
-      err,
+      failure,
       _req,
       res,
       next,
     ) => {
-      void next; // declared only to mark this as a 4-arg error handler
+      expect(next).toBeInstanceOf(Function);
       await Promise.resolve();
-      res.status(403).json({ caught: (err as Error).message });
+      res.status(403).json({ caught: (failure as Error).message });
     };
     const wrapped = wrapExpressMiddleware(errorHandler);
 

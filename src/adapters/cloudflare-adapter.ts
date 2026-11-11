@@ -1,5 +1,3 @@
-/* eslint-disable sonarjs/max-lines -- large data or adapter file kept as one module */
-
 /**
  * @file Cloudflare Workers HTTP adapter that routes native Web requests through NestJS.
  */
@@ -26,6 +24,9 @@ import {
   createFastifyReply,
   createFastifyLogger,
   type FastifyHook,
+  type FastifyCompatRequest,
+  type FastifyCompatReply,
+  isAsyncHook,
   type FastifyPlugin,
   type FastifyPluginAsync,
   type FastifyLikeInstance,
@@ -803,28 +804,16 @@ function toHookList<T>(hooks: T | T[] | undefined): T[] {
  */
 function runFastifyHook(
   hook: FastifyHook,
-  request: unknown,
-  reply: unknown,
+  request: FastifyCompatRequest,
+  reply: FastifyCompatReply,
 ): Promise<void> {
+  if (isAsyncHook(hook)) {
+    return hook(request, reply);
+  }
   return new Promise<void>((resolve, reject) => {
-    if (hook.length <= 2) {
-      (hook as unknown as (req: unknown, rep: unknown) => Promise<void>)(
-        request,
-        reply,
-      )
-        .then(resolve)
-        .catch(reject);
-    } else {
-      (
-        hook as unknown as (
-          req: unknown,
-          rep: unknown,
-          done: (err?: Error) => void,
-        ) => void
-      )(request, reply, (failure?: Error) =>
-        failure ? reject(failure) : resolve(),
-      );
-    }
+    hook(request, reply, (failure?: Error) =>
+      failure ? reject(failure) : resolve(),
+    );
   });
 }
 
@@ -3021,5 +3010,3 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
  * public surface is unchanged.
  */
 export { CloudflareAdapter as FetchAdapter };
-
-/* eslint-enable sonarjs/max-lines -- end of the file-level exemption */
