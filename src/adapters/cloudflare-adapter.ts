@@ -563,18 +563,40 @@ function isDynamic(path: string): boolean {
  * ```
  */
 function normalizePathPattern(path: string): string {
-  return (
+  return unwrapBraces(
     path
       // `{*name}` -> `:name*`
       .replaceAll(/{\*(\w+)}/g, ':$1*')
       // `*name` -> `:name*`
       .replaceAll(/\*(\w+)/g, ':$1*')
       // `(.*)` -> `*`
-      .replaceAll('(.*)', '*')
-      // strip any remaining `{ }` wrappers around segments
-      // eslint-disable-next-line sonarjs/super-linear-regex -- the group is delimited by literal braces, so matching cannot backtrack
-      .replaceAll(/{([^}]*)}/g, '$1')
+      .replaceAll('(.*)', '*'),
   );
+}
+
+/**
+ * Strip every `{ ... }` wrapper, keeping its contents. Equivalent to
+ * replacing `/{([^}]*)}/g` with `$1`, but scans once so an unclosed `{` cannot
+ * cause repeated rescans.
+ * @param path - Route path that may contain brace wrappers.
+ * @returns The path with each closed brace pair removed.
+ * @example
+ * ```ts
+ * unwrapBraces('/a/{b}'); // '/a/b'
+ * ```
+ */
+function unwrapBraces(path: string): string {
+  let result = '';
+  let cursor = 0;
+  for (;;) {
+    const open = path.indexOf('{', cursor);
+    const close = open === -1 ? -1 : path.indexOf('}', open + 1);
+    if (close === -1) {
+      return result + path.slice(cursor);
+    }
+    result += path.slice(cursor, open) + path.slice(open + 1, close);
+    cursor = close + 1;
+  }
 }
 
 /**
@@ -1486,10 +1508,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         plugin: FastifyPlugin<Options> | FastifyPluginAsync<Options>,
         opts?: Options,
       ) {
-        // eslint-disable-next-line promise/prefer-await-to-callbacks -- register() is synchronous, so failures are logged
-        wrapFastifyPlugin(plugin, instance, opts).catch((error: unknown) =>
-          instance.log.error(String(error)),
-        );
+        const logFailure = (reason: unknown): void => {
+          instance.log.error(String(reason));
+        };
+        wrapFastifyPlugin(plugin, instance, opts).catch(logFailure);
         return instance;
       },
 

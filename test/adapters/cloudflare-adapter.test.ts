@@ -488,6 +488,36 @@ function registerWildcardAndOrigin(): void {
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ rest: 'a/b' });
     });
+
+    it('unwraps a literal brace group in a route path', async () => {
+      const adapter = new CloudflareAdapter();
+      adapter.get('/users/{list}/:id', (req: CloudflareRequest, res) => {
+        adapter.reply(res, { id: req.params.id });
+      });
+
+      const res = await adapter.handle(
+        new Request('https://example.com/users/list/7'),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ id: '7' });
+    });
+
+    it('unwraps every brace group in a long route path', async () => {
+      const adapter = new CloudflareAdapter();
+      const segments = 2000;
+      adapter.get(
+        `${'/{s}'.repeat(segments)}/:id`,
+        (req: CloudflareRequest, res) => {
+          adapter.reply(res, { id: req.params.id });
+        },
+      );
+
+      const res = await adapter.handle(
+        new Request(`https://example.com${'/s'.repeat(segments)}/9`),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ id: '9' });
+    });
   });
 
   describe('CORS origin handling', () => {

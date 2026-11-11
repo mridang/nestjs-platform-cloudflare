@@ -722,14 +722,17 @@ export function wrapFastifyPlugin<Options = Record<string, unknown>>(
     } else {
       // Callback plugin
       try {
-        // eslint-disable-next-line promise/prefer-await-to-callbacks -- Fastify's callback plugin style requires a done callback
-        (plugin as FastifyPlugin<Options>)(instance, opts, (err?: Error) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
+        (plugin as FastifyPlugin<Options>)(
+          instance,
+          opts,
+          (failure?: Error) => {
+            if (failure) {
+              reject(failure);
+            } else {
+              resolve();
+            }
+          },
+        );
       } catch (error) {
         reject(error);
       }

@@ -900,7 +900,7 @@ export function wrapExpressMiddleware(
   const wrapped = async (
     cfReq: CloudflareRequest,
     cfRes: CloudflareResponse,
-    next: (err?: unknown) => void,
+    continueChain: (err?: unknown) => void,
     incomingErr?: unknown,
   ): Promise<void> => {
     const expressReq = createExpressRequest(cfReq);
@@ -911,8 +911,17 @@ export function wrapExpressMiddleware(
         // Always forward (with or without an error) to the chain; the chain
         // decides whether a downstream error handler exists. resolve() here so
         // this wrapper's promise settles once control has passed on.
-        // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-        next(err);
+        continueChain(err);
+        resolve();
+      };
+
+      const settleIfSent = (): void => {
+        if (cfRes.sent) {
+          resolve();
+        }
+      };
+      const forwardFailure = (reason: unknown): void => {
+        continueChain(reason);
         resolve();
       };
 
@@ -920,8 +929,7 @@ export function wrapExpressMiddleware(
       if (isErrorMiddleware) {
         if (incomingErr === undefined) {
           // Normal path: skip the error handler and advance the chain.
-          // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-          next();
+          continueChain();
           resolve();
           return;
         }
@@ -933,33 +941,21 @@ export function wrapExpressMiddleware(
             expressNext,
           );
           if (result instanceof Promise) {
+            // The handler responded (or returned without calling next): settle
+            // the wrapper so the chain can finish.
             result
-              .then(() => {
-                // The handler responded (or returned without calling next):
-                // settle the wrapper so the chain can finish.
-                // eslint-disable-next-line sonarjs/nested-control-flow, promise/always-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-                if (cfRes.sent) {
-                  resolve();
-                }
-              })
+              .then(settleIfSent)
               // A throw/reject from an error handler is itself an error in
               // flight: forward it down the chain (Express routes it to the
               // next error handler) instead of rejecting the wrapper.
-              // eslint-disable-next-line promise/prefer-await-to-callbacks -- logic rewrite would be large: keep this settle-once Promise wrapper
-              .catch((error) => {
-                // eslint-disable-next-line promise/no-callback-in-promise, n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-                next(error);
-                resolve();
-              });
+              .catch(forwardFailure);
           } else if (cfRes.sent) {
             resolve();
           } else {
             // The response is still pending; the chain resumes once it is sent.
           }
         } catch (error) {
-          // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-          next(error);
-          resolve();
+          forwardFailure(error);
         }
         return;
       }
@@ -972,30 +968,20 @@ export function wrapExpressMiddleware(
         );
         if (result instanceof Promise) {
           result
-            .then(() => {
-              // eslint-disable-next-line promise/always-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-              if (cfRes.sent) resolve();
-            })
+            .then(settleIfSent)
             // In real Express, a thrown/rejected error from a normal (3-arg)
             // middleware is equivalent to next(err): forward it so the chain
             // advances to the next downstream error handler, instead of
             // rejecting the wrapper (which would skip straight to the
             // catch-all 500).
-            // eslint-disable-next-line promise/prefer-await-to-callbacks -- logic rewrite would be large: keep this settle-once Promise wrapper
-            .catch((error) => {
-              // eslint-disable-next-line promise/no-callback-in-promise, n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-              next(error);
-              resolve();
-            });
+            .catch(forwardFailure);
         } else if (cfRes.sent) {
           resolve();
         } else {
           // The response is still pending; the chain resumes once it is sent.
         }
       } catch (error) {
-        // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
-        next(error);
-        resolve();
+        forwardFailure(error);
       }
     });
   };
