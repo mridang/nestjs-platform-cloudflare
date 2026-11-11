@@ -3,6 +3,15 @@ import type {
   CloudflareResponse,
 } from '../adapters/cloudflare-adapter.js';
 
+/** A single header value, or several values for a repeated header. */
+type HeaderValue = string | string[];
+
+/** A header value, or `undefined` when the header is absent. */
+type OptionalHeaderValue = HeaderValue | undefined;
+
+/** Values accepted by the `sameSite` cookie attribute, besides a boolean. */
+type SameSiteValue = 'lax' | 'strict' | 'none';
+
 /**
  * Express-compatible request object.
  *
@@ -30,7 +39,7 @@ export interface ExpressCompatRequest {
   /** Whether the request was made over a secure (TLS) connection. */
   secure: boolean;
   /** Request headers, lower-cased and grouped (array for repeated keys). */
-  headers: Record<string, string | string[] | undefined>;
+  headers: Record<string, OptionalHeaderValue>;
 
   /** Route parameters extracted from the matched path. */
   params: Record<string, string | undefined>;
@@ -41,44 +50,50 @@ export interface ExpressCompatRequest {
 
   /**
    * Return a request header value by name (case-insensitive).
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   get(name: string): string | undefined;
+
   /**
    * Alias for {@link ExpressCompatRequest.get}.
-   * @param name Header name.
+   * @param name - Header name.
    * @returns The header value, or `undefined` if absent.
    */
   header(name: string): string | undefined;
+
   /**
    * Test whether the request's `Content-Type` matches the given type(s).
-   * @param type Type or list of types to test against.
+   * @param type - Type or list of types to test against.
    * @returns The matched type, `false` if none match, or `null` if no
-   *   `Content-Type` is present.
+   * `Content-Type` is present.
    */
   is(type: string | string[]): string | false | null;
+
   /**
    * Negotiate the best response type against the `Accept` header.
-   * @param types Candidate types in preference order.
+   * @param types - Candidate types in preference order.
    * @returns The best matching type, or `false` if none are acceptable.
    */
   accepts(...types: string[]): string | false;
+
   /**
    * Negotiate the best encoding against the `Accept-Encoding` header.
-   * @param encodings Candidate encodings in preference order.
+   * @param encodings - Candidate encodings in preference order.
    * @returns The best matching encoding, or `false` if none are acceptable.
    */
   acceptsEncodings(...encodings: string[]): string | false;
+
   /**
    * Negotiate the best charset against the `Accept-Charset` header.
-   * @param charsets Candidate charsets in preference order.
+   * @param charsets - Candidate charsets in preference order.
    * @returns The best matching charset, or `false` if none are acceptable.
    */
   acceptsCharsets(...charsets: string[]): string | false;
+
   /**
    * Negotiate the best language against the `Accept-Language` header.
-   * @param langs Candidate languages in preference order.
+   * @param langs - Candidate languages in preference order.
    * @returns The best matching language, or `false` if none are acceptable.
    */
   acceptsLanguages(...langs: string[]): string | false;
@@ -121,151 +136,162 @@ export interface ExpressCompatResponse {
 
   /**
    * Set the response status code.
-   * @param code HTTP status code.
+   * @param code - HTTP status code.
    * @returns This response, for chaining.
    */
   status(code: number): this;
+
   /**
    * Set the status code and send its standard reason phrase as the body.
-   * @param code HTTP status code.
+   * @param code - HTTP status code.
    * @returns This response, for chaining.
    */
   sendStatus(code: number): this;
 
   /**
    * Set one header, or many headers from an object.
-   * @param field Header name, or a map of header names to values.
-   * @param value Header value when `field` is a string.
+   * @param field - Header name, or a map of header names to values.
+   * @param value - Header value when `field` is a string.
    * @returns This response, for chaining.
    */
   set(field: string, value: string | string[]): this;
   set(field: Record<string, string | string[]>): this;
+
   /**
    * Get or set a header depending on whether `value` is supplied.
-   * @param field Header name.
-   * @param value Value to set; omit to read the current value.
+   * @param field - Header name.
+   * @param value - Value to set; omit to read the current value.
    * @returns This response when setting, or the header value when reading.
    */
-  header(
-    field: string,
-    value?: string | string[],
-  ): this | string | string[] | undefined;
+  header(field: string, value?: string | string[]): this | OptionalHeaderValue;
+
   /**
    * Read a response header value.
-   * @param field Header name.
+   * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
-  get(field: string): string | string[] | undefined;
+  get(field: string): OptionalHeaderValue;
+
   /**
    * Append a value to a header without replacing existing values.
-   * @param field Header name.
-   * @param value Value(s) to append.
+   * @param field - Header name.
+   * @param value - Value(s) to append.
    * @returns This response, for chaining.
    */
   append(field: string, value: string | string[]): this;
 
   /**
    * Node `http.ServerResponse`-style header setter (replace semantics).
-   * @param field Header name.
-   * @param value Header value(s).
+   * @param field - Header name.
+   * @param value - Header value(s).
    */
   setHeader(field: string, value: string | number | string[]): void;
+
   /**
    * Node `http.ServerResponse`-style header getter.
-   * @param field Header name.
+   * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
-  getHeader(field: string): string | number | string[] | undefined;
+  getHeader(field: string): number | OptionalHeaderValue;
+
   /**
    * Node `http.ServerResponse`-style header remover.
-   * @param field Header name.
+   * @param field - Header name.
    */
   removeHeader(field: string): void;
 
   /**
    * Send a response body, inferring `Content-Type` from its kind.
-   * @param body Body to send.
+   * @param body - Body to send.
    * @returns This response, for chaining.
    */
   send(body?: unknown): this;
+
   /**
    * Send a JSON response body.
-   * @param body Value to serialize as JSON.
+   * @param body - Value to serialize as JSON.
    * @returns This response, for chaining.
    */
   json(body?: unknown): this;
+
   /**
    * Send a JSONP response body (currently serialized as plain JSON).
-   * @param body Value to serialize.
+   * @param body - Value to serialize.
    * @returns This response, for chaining.
    */
   jsonp(body?: unknown): this;
+
   /**
    * End the response, optionally writing a final chunk.
-   * @param data Optional final body chunk.
-   * @param encoding Accepted for parity; ignored.
+   * @param data - Optional final body chunk.
+   * @param encoding - Accepted for parity; ignored.
    * @returns This response, for chaining.
    */
   end(data?: unknown, encoding?: string): this;
 
   /**
    * Redirect the client to a URL, optionally with a status code.
-   * @param url Target URL (or status code when followed by `url`).
-   * @param status Status code when the first argument is the URL position.
+   * @param url - Target URL (or status code when followed by `url`).
+   * @param status - Status code when the first argument is the URL position.
    */
   redirect(url: string): void;
   redirect(status: number, url: string): void;
 
   /**
    * Set `Content-Type` from a type name or full MIME type.
-   * @param type Shorthand (e.g. `json`) or a full MIME type.
+   * @param type - Shorthand (e.g. `json`) or a full MIME type.
    * @returns This response, for chaining.
    */
   type(type: string): this;
+
   /**
    * Alias for {@link ExpressCompatResponse.type}.
-   * @param type Shorthand or full MIME type.
+   * @param type - Shorthand or full MIME type.
    * @returns This response, for chaining.
    */
   contentType(type: string): this;
 
   /**
    * Append a `Set-Cookie` header for the given cookie.
-   * @param name Cookie name.
-   * @param value Cookie value.
-   * @param options Cookie attributes.
+   * @param name - Cookie name.
+   * @param value - Cookie value.
+   * @param options - Cookie attributes.
    * @returns This response, for chaining.
    */
   cookie(name: string, value: string, options?: CookieOptions): this;
+
   /**
    * Append a `Set-Cookie` header that expires the named cookie.
-   * @param name Cookie name.
-   * @param options Cookie attributes used when clearing.
+   * @param name - Cookie name.
+   * @param options - Cookie attributes used when clearing.
    * @returns This response, for chaining.
    */
   clearCookie(name: string, options?: CookieOptions): this;
 
   /**
    * Set the `Location` header.
-   * @param url Location URL.
+   * @param url - Location URL.
    * @returns This response, for chaining.
    */
   location(url: string): this;
+
   /**
    * Set the `Link` header from a relation-to-URL map.
-   * @param links Map of link relations to URLs.
+   * @param links - Map of link relations to URLs.
    * @returns This response, for chaining.
    */
   links(links: Record<string, string>): this;
+
   /**
    * Append a field to the `Vary` header.
-   * @param field Header field to vary on.
+   * @param field - Header field to vary on.
    * @returns This response, for chaining.
    */
   vary(field: string): this;
+
   /**
    * Run the content-negotiation branch matching the request's `Accept` header.
-   * @param obj Map of types to handlers, with an optional `default`.
+   * @param obj - Map of types to handlers, with an optional `default`.
    * @returns This response, for chaining.
    */
   format(obj: Record<string, () => void>): this;
@@ -291,7 +317,7 @@ export interface CookieOptions {
   /** `Path` attribute scoping the cookie (defaults to `/`). */
   path?: string;
   /** `SameSite` attribute; `true` maps to `Strict`. */
-  sameSite?: boolean | 'lax' | 'strict' | 'none';
+  sameSite?: boolean | SameSiteValue;
   /** Whether to set the `Secure` attribute. */
   secure?: boolean;
   /** Whether the cookie should be signed. */
@@ -362,8 +388,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 /**
  * Convert native `Headers` into a plain object keyed by lower-cased header
  * name, collecting repeated headers into arrays.
- *
- * @param headers Native Web `Headers` to convert.
+ * @param headers - Native Web `Headers` to convert.
  * @returns A plain headers object.
  */
 function headersToObject(
@@ -388,9 +413,8 @@ function headersToObject(
 /**
  * Parse an `Accept`-family header and pick the best match among candidate
  * types, honouring `q` weights and `*`/`type/*` wildcards.
- *
- * @param acceptHeader The raw header value, or `undefined` if absent.
- * @param types Candidate types in caller preference order.
+ * @param acceptHeader - The raw header value, or `undefined` if absent.
+ * @param types - Candidate types in caller preference order.
  * @returns The best matching type, or `false` if none are acceptable.
  */
 function parseAccept(
@@ -409,12 +433,12 @@ function parseAccept(
       params.forEach((param) => {
         const [key, value] = param.trim().split('=');
         if (key === 'q') {
-          quality = parseFloat(value) || 1;
+          quality = Number.parseFloat(value) || 1;
         }
       });
       return { type: type.trim(), quality };
     })
-    .sort((a, b) => b.quality - a.quality);
+    .toSorted((a, b) => b.quality - a.quality);
 
   for (const accept of accepts) {
     for (const type of types) {
@@ -434,10 +458,9 @@ function parseAccept(
 
 /**
  * Serialize a cookie name/value pair plus attributes into a `Set-Cookie` value.
- *
- * @param name Cookie name.
- * @param value Cookie value.
- * @param options Cookie attributes.
+ * @param name - Cookie name.
+ * @param value - Cookie value.
+ * @param options - Cookie attributes.
  * @returns The serialized `Set-Cookie` header value.
  */
 function serializeCookie(
@@ -453,11 +476,7 @@ function serializeCookie(
   if (options.domain) {
     cookie += `; Domain=${options.domain}`;
   }
-  if (options.path) {
-    cookie += `; Path=${options.path}`;
-  } else {
-    cookie += '; Path=/';
-  }
+  cookie += options.path ? `; Path=${options.path}` : '; Path=/';
   if (options.expires) {
     cookie += `; Expires=${options.expires.toUTCString()}`;
   }
@@ -468,13 +487,12 @@ function serializeCookie(
     cookie += '; Secure';
   }
   if (options.sameSite) {
-    if (options.sameSite === true) {
-      cookie += '; SameSite=Strict';
-    } else {
-      cookie += `; SameSite=${
-        options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
-      }`;
-    }
+    cookie +=
+      options.sameSite === true
+        ? '; SameSite=Strict'
+        : `; SameSite=${
+            options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
+          }`;
   }
 
   return cookie;
@@ -482,8 +500,7 @@ function serializeCookie(
 
 /**
  * Build an Express-compatible request wrapper over a {@link CloudflareRequest}.
- *
- * @param cfReq The adapter request to wrap.
+ * @param cfReq - The adapter request to wrap.
  * @returns An Express-shaped request that reads from `cfReq`.
  */
 export function createExpressRequest(
@@ -528,7 +545,7 @@ export function createExpressRequest(
 
     xhr:
       cfReq.headers.get('x-requested-with')?.toLowerCase() === 'xmlhttprequest',
-    subdomains: cfReq.hostname?.split('.').slice(0, -2).reverse() || [],
+    subdomains: cfReq.hostname?.split('.').slice(0, -2).toReversed() || [],
 
     get(name: string): string | undefined {
       const key = name.toLowerCase();
@@ -537,9 +554,10 @@ export function createExpressRequest(
     },
 
     header(name: string): string | undefined {
-      return this.get(name);
+      return req.get(name);
     },
 
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's req.is(), which returns string, false or null
     is(type: string | string[]): string | false | null {
       const contentType = cfReq.headers.get('content-type');
       if (!contentType) {
@@ -582,6 +600,8 @@ export function createExpressRequest(
         langs,
       );
     },
+    fresh: false,
+    stale: true,
   };
 
   // Freshness must be computed by comparing the request's conditional headers
@@ -590,23 +610,20 @@ export function createExpressRequest(
   // response validators to compare against here, so use Express's safe default
   // (no validators compared => not fresh) rather than deriving truthiness from
   // request header presence, which wrongly 304s every conditional GET.
-  req.fresh = false;
-  req.stale = true;
 
   return req;
 }
 
 /**
  * Build an Express-compatible response wrapper over a {@link CloudflareResponse}.
- *
- * @param cfRes The adapter response to wrap.
+ * @param cfRes - The adapter response to wrap.
  * @returns An Express-shaped response that writes through to `cfRes`.
  */
+// eslint-disable-next-line sonarjs/max-lines-per-function -- logic rewrite would be large: keep this settle-once Promise wrapper
 export function createExpressResponse(
   cfRes: CloudflareResponse,
 ): ExpressCompatResponse {
   let statusMessage = 'OK';
-  const cookies: string[] = [];
 
   const res: ExpressCompatResponse = {
     get statusCode() {
@@ -629,13 +646,13 @@ export function createExpressResponse(
     status(code: number) {
       cfRes.status(code);
       statusMessage = STATUS_MESSAGES[code] || 'Unknown';
-      return this;
+      return res;
     },
 
     sendStatus(code: number) {
-      this.status(code);
+      res.status(code);
       cfRes.send(STATUS_MESSAGES[code] || String(code));
-      return this;
+      return res;
     },
 
     set(
@@ -652,26 +669,27 @@ export function createExpressResponse(
             cfRes.setHeader(key, val);
           }
         });
-      } else if (value !== undefined) {
-        if (Array.isArray(value)) {
-          // Replace semantics: discard any prior value, then append each item.
-          cfRes.removeHeader(field);
-          value.forEach((v) => cfRes.headers.append(field, v));
-        } else {
-          cfRes.setHeader(field, value);
-        }
+      } else if (value === undefined) {
+        // No value to set and no header map given: nothing to do.
+      } else if (Array.isArray(value)) {
+        // Replace semantics: discard any prior value, then append each item.
+        cfRes.removeHeader(field);
+        value.forEach((v) => cfRes.headers.append(field, v));
+      } else {
+        cfRes.setHeader(field, value);
       }
-      return this;
+      return res;
     },
 
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's res.header(), a getter when called without a value and a chainable setter otherwise
     header(
       field: string,
       value?: string | string[],
-    ): string | string[] | undefined | ExpressCompatResponse {
+    ): OptionalHeaderValue | ExpressCompatResponse {
       if (value === undefined) {
-        return this.get(field);
+        return res.get(field);
       }
-      return this.set(field, value);
+      return res.set(field, value);
     },
 
     get(field: string) {
@@ -698,7 +716,8 @@ export function createExpressResponse(
       }
     },
 
-    getHeader(field: string) {
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's getHeader, which returns string, string[] or undefined
+    getHeader(field: string): OptionalHeaderValue {
       if (field.toLowerCase() === 'set-cookie') {
         // Node/Express return Set-Cookie as string[]. Set-Cookie values contain
         // commas (Expires=Wed, 01 ...), so a comma-joined string is unparseable.
@@ -718,7 +737,7 @@ export function createExpressResponse(
       } else {
         cfRes.headers.append(field, value);
       }
-      return this;
+      return res;
     },
 
     send(body?: unknown) {
@@ -733,34 +752,34 @@ export function createExpressResponse(
         if (!cfRes.getHeader('Content-Type')) {
           cfRes.setHeader('Content-Type', 'application/octet-stream');
         }
-        // eslint-disable-next-line no-undef
+
         cfRes.send(body as unknown as BodyInit);
       } else if (typeof body === 'object') {
-        return this.json(body);
+        return res.json(body);
       } else {
         cfRes.send(String(body));
       }
-      return this;
+      return res;
     },
 
     json(body?: unknown) {
       cfRes.json(body);
-      return this;
+      return res;
     },
 
     jsonp(body?: unknown) {
       // For JSONP we would wrap in a callback; send as JSON for now.
       cfRes.json(body);
-      return this;
+      return res;
     },
 
     end(data?: unknown) {
-      if (data !== undefined) {
-        cfRes.end(typeof data === 'string' ? data : JSON.stringify(data));
-      } else {
+      if (data === undefined) {
         cfRes.end();
+      } else {
+        cfRes.end(typeof data === 'string' ? data : JSON.stringify(data));
       }
-      return this;
+      return res;
     },
 
     redirect(statusOrUrl: number | string, url?: string) {
@@ -768,6 +787,8 @@ export function createExpressResponse(
         cfRes.redirect(url, statusOrUrl);
       } else if (typeof statusOrUrl === 'string') {
         cfRes.redirect(statusOrUrl, 302);
+      } else {
+        // Neither a status with a URL nor a bare URL: nothing to redirect to.
       }
     },
 
@@ -782,28 +803,27 @@ export function createExpressResponse(
       };
       const contentType = mimeTypes[type] || type;
       cfRes.setHeader('Content-Type', contentType);
-      return this;
+      return res;
     },
 
     contentType(type: string) {
-      return this.type(type);
+      return res.type(type);
     },
 
     cookie(name: string, value: string, options: CookieOptions = {}) {
       const cookieStr = serializeCookie(name, value, options);
-      cookies.push(cookieStr);
       cfRes.headers.append('Set-Cookie', cookieStr);
-      return this;
+      return res;
     },
 
     clearCookie(name: string, options: CookieOptions = {}) {
       const clearOptions = { ...options, expires: new Date(0), maxAge: 0 };
-      return this.cookie(name, '', clearOptions);
+      return res.cookie(name, '', clearOptions);
     },
 
     location(url: string) {
       cfRes.setHeader('Location', url);
-      return this;
+      return res;
     },
 
     links(links: Record<string, string>) {
@@ -811,7 +831,7 @@ export function createExpressResponse(
         .map(([rel, href]) => `<${href}>; rel="${rel}"`)
         .join(', ');
       cfRes.setHeader('Link', linkHeader);
-      return this;
+      return res;
     },
 
     vary(field: string) {
@@ -821,7 +841,7 @@ export function createExpressResponse(
       } else {
         cfRes.setHeader('Vary', field);
       }
-      return this;
+      return res;
     },
 
     format(obj: Record<string, () => void>) {
@@ -833,8 +853,10 @@ export function createExpressResponse(
         obj[matched]();
       } else if (obj.default) {
         obj.default();
+      } else {
+        // No handler matched the Accept header and there is no default.
       }
-      return this;
+      return res;
     },
   };
 
@@ -867,8 +889,7 @@ export type WrappedExpressMiddleware = ((
  * error is forwarded down the chain (the chain locates the next 4-arg error
  * handler). 4-arg error-handling middleware are skipped on the normal path and
  * only run when an error reaches them, receiving the propagated error.
- *
- * @param middleware The Express middleware (3-arg) or error handler (4-arg).
+ * @param middleware - The Express middleware (3-arg) or error handler (4-arg).
  * @returns A wrapped function the adapter's middleware chain can invoke.
  */
 export function wrapExpressMiddleware(
@@ -879,7 +900,7 @@ export function wrapExpressMiddleware(
   const wrapped = async (
     cfReq: CloudflareRequest,
     cfRes: CloudflareResponse,
-    next: (err?: unknown) => void,
+    continueChain: (err?: unknown) => void,
     incomingErr?: unknown,
   ): Promise<void> => {
     const expressReq = createExpressRequest(cfReq);
@@ -890,7 +911,17 @@ export function wrapExpressMiddleware(
         // Always forward (with or without an error) to the chain; the chain
         // decides whether a downstream error handler exists. resolve() here so
         // this wrapper's promise settles once control has passed on.
-        next(err);
+        continueChain(err);
+        resolve();
+      };
+
+      const settleIfSent = (): void => {
+        if (cfRes.sent) {
+          resolve();
+        }
+      };
+      const forwardFailure = (reason: unknown): void => {
+        continueChain(reason);
         resolve();
       };
 
@@ -898,7 +929,7 @@ export function wrapExpressMiddleware(
       if (isErrorMiddleware) {
         if (incomingErr === undefined) {
           // Normal path: skip the error handler and advance the chain.
-          next();
+          continueChain();
           resolve();
           return;
         }
@@ -910,27 +941,21 @@ export function wrapExpressMiddleware(
             expressNext,
           );
           if (result instanceof Promise) {
+            // The handler responded (or returned without calling next): settle
+            // the wrapper so the chain can finish.
             result
-              .then(() => {
-                // The handler responded (or returned without calling next):
-                // settle the wrapper so the chain can finish.
-                if (cfRes.sent) {
-                  resolve();
-                }
-              })
+              .then(settleIfSent)
               // A throw/reject from an error handler is itself an error in
               // flight: forward it down the chain (Express routes it to the
               // next error handler) instead of rejecting the wrapper.
-              .catch((e) => {
-                next(e);
-                resolve();
-              });
+              .catch(forwardFailure);
           } else if (cfRes.sent) {
             resolve();
+          } else {
+            // The response is still pending; the chain resumes once it is sent.
           }
-        } catch (e) {
-          next(e);
-          resolve();
+        } catch (error) {
+          forwardFailure(error);
         }
         return;
       }
@@ -943,24 +968,20 @@ export function wrapExpressMiddleware(
         );
         if (result instanceof Promise) {
           result
-            .then(() => {
-              if (cfRes.sent) resolve();
-            })
+            .then(settleIfSent)
             // In real Express, a thrown/rejected error from a normal (3-arg)
             // middleware is equivalent to next(err): forward it so the chain
             // advances to the next downstream error handler, instead of
             // rejecting the wrapper (which would skip straight to the
             // catch-all 500).
-            .catch((err) => {
-              next(err);
-              resolve();
-            });
+            .catch(forwardFailure);
         } else if (cfRes.sent) {
           resolve();
+        } else {
+          // The response is still pending; the chain resumes once it is sent.
         }
-      } catch (err) {
-        next(err);
-        resolve();
+      } catch (error) {
+        forwardFailure(error);
       }
     });
   };

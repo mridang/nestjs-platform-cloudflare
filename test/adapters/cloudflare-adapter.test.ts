@@ -8,7 +8,7 @@ import {
   type CloudflareResponse,
 } from '../../src/index.js';
 
-describe('CloudflareAdapter', () => {
+function registerBasicRouting(): void {
   it('reports its type as "fetch"', () => {
     expect(new CloudflareAdapter().getType()).toBe('fetch');
   });
@@ -163,7 +163,9 @@ describe('CloudflareAdapter', () => {
     );
     expect(res.headers.get('access-control-allow-credentials')).toBe('true');
   });
+}
 
+function registerCorsAndStatic(): void {
   it('applies CORS headers to non-preflight responses', async () => {
     const adapter = new CloudflareAdapter();
     adapter.enableCors({ origin: '*' });
@@ -292,7 +294,9 @@ describe('CloudflareAdapter', () => {
     await adapter.handle(new Request('https://example.com/q?a=1&a=2&b=3'));
     expect(seen?.query).toEqual({ a: ['1', '2'], b: '3' });
   });
+}
 
+function registerVersioningAndDeferred(): void {
   describe('header versioning', () => {
     function versionedAdapter(): CloudflareAdapter {
       const adapter = new CloudflareAdapter();
@@ -428,7 +432,7 @@ describe('CloudflareAdapter', () => {
             headers: { 'x-api-version': '1' },
           }),
         ),
-        new Promise<Response>((_r, reject) =>
+        new Promise<Response>((_resolve, reject) =>
           setTimeout(() => reject(new Error('request hung')), 1000),
         ),
       ]);
@@ -444,7 +448,9 @@ describe('CloudflareAdapter', () => {
     const res = await adapter.handle(new Request('https://example.com/fall'));
     expect(res.status).toBe(404);
   });
+}
 
+function registerWildcardAndOrigin(): void {
   describe('wildcard / catch-all routes (path-to-regexp v8 syntax)', () => {
     it('matches @Get("{*path}") catch-all and captures the splat', async () => {
       const adapter = new CloudflareAdapter();
@@ -481,6 +487,36 @@ describe('CloudflareAdapter', () => {
       );
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ rest: 'a/b' });
+    });
+
+    it('unwraps a literal brace group in a route path', async () => {
+      const adapter = new CloudflareAdapter();
+      adapter.get('/users/{list}/:id', (req: CloudflareRequest, res) => {
+        adapter.reply(res, { id: req.params.id });
+      });
+
+      const res = await adapter.handle(
+        new Request('https://example.com/users/list/7'),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ id: '7' });
+    });
+
+    it('unwraps every brace group in a long route path', async () => {
+      const adapter = new CloudflareAdapter();
+      const segments = 2000;
+      adapter.get(
+        `${'/{s}'.repeat(segments)}/:id`,
+        (req: CloudflareRequest, res) => {
+          adapter.reply(res, { id: req.params.id });
+        },
+      );
+
+      const res = await adapter.handle(
+        new Request(`https://example.com${'/s'.repeat(segments)}/9`),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ id: '9' });
     });
   });
 
@@ -535,8 +571,8 @@ describe('CloudflareAdapter', () => {
       adapter.enableCors({
         origin: (
           _origin: string,
-          cb: (err: Error | null, allow?: boolean | string) => void,
-        ) => cb(null, true),
+          done: (err: Error | null, allow?: boolean | string) => void,
+        ) => done(null, true),
       });
       adapter.get('/cb', (_req, res: CloudflareResponse) =>
         adapter.reply(res, { ok: true }),
@@ -587,7 +623,9 @@ describe('CloudflareAdapter', () => {
       expect(vary).toContain('Access-Control-Request-Headers');
     });
   });
+}
 
+function registerMutableFieldsAndErrors(): void {
   describe('mutable per-request fields (no frozen sentinel)', () => {
     it('allows middleware to write to req.query when there is no query string', async () => {
       const adapter = new CloudflareAdapter();
@@ -656,13 +694,13 @@ describe('CloudflareAdapter', () => {
       // must be declared even though `next` is unused here.
       adapter.useExpressMiddleware(
         (
-          err: unknown,
+          failure: unknown,
           _req: unknown,
           res: { status: (c: number) => { json: (b: unknown) => void } },
           next: unknown,
         ) => {
-          void next; // declared only to mark this as a 4-arg error handler
-          res.status(500).json({ caught: (err as Error).message });
+          expect(next).toBeInstanceOf(Function);
+          res.status(500).json({ caught: (failure as Error).message });
         },
       );
       adapter.get('/x', (_req, res: CloudflareResponse) =>
@@ -699,13 +737,13 @@ describe('CloudflareAdapter', () => {
       });
       adapter.useExpressMiddleware(
         (
-          err: unknown,
+          failure: unknown,
           _req: unknown,
           res: { status: (c: number) => { json: (b: unknown) => void } },
           next: unknown,
         ) => {
-          void next; // declared only to mark this as a 4-arg error handler
-          res.status(500).json({ caught: (err as Error).message });
+          expect(next).toBeInstanceOf(Function);
+          res.status(500).json({ caught: (failure as Error).message });
         },
       );
       adapter.get('/thrown', (_req, res: CloudflareResponse) =>
@@ -727,13 +765,13 @@ describe('CloudflareAdapter', () => {
       });
       adapter.useExpressMiddleware(
         (
-          err: unknown,
+          failure: unknown,
           _req: unknown,
           res: { status: (c: number) => { json: (b: unknown) => void } },
           next: unknown,
         ) => {
-          void next; // declared only to mark this as a 4-arg error handler
-          res.status(500).json({ caught: (err as Error).message });
+          expect(next).toBeInstanceOf(Function);
+          res.status(500).json({ caught: (failure as Error).message });
         },
       );
       adapter.get('/rejected', (_req, res: CloudflareResponse) =>
@@ -747,7 +785,9 @@ describe('CloudflareAdapter', () => {
       expect(await res.json()).toEqual({ caught: 'rejected-boom' });
     });
   });
+}
 
+function registerMultipartAndFilters(): void {
   describe('malformed multipart body parsing', () => {
     it('does not produce an unhandled rejection on a malformed multipart body', async () => {
       const adapter = new CloudflareAdapter();
@@ -785,16 +825,16 @@ describe('CloudflareAdapter', () => {
       // An async exception filter: it awaits before writing the response, on a
       // later tick. handle() must await res.settled so the intended body is
       // produced before the Response is built.
-      adapter.setErrorHandler((error: Error, _req, res: CloudflareResponse) => {
-        void (async () => {
+      adapter.setErrorHandler(
+        async (failure: Error, _req, res: CloudflareResponse) => {
           await Promise.resolve();
           res.statusCode = 500;
           res.setHeader('content-type', 'application/json; charset=utf-8');
-          res.body = JSON.stringify({ filtered: error.message });
+          res.body = JSON.stringify({ filtered: failure.message });
           res.sent = true;
           (res as CloudflareResponse & { settle: () => void }).settle();
-        })();
-      });
+        },
+      );
       adapter.get('/boom', () => {
         throw new Error('handler-failed');
       });
@@ -916,7 +956,9 @@ describe('CloudflareAdapter', () => {
       expect(await res.json()).toEqual({ custom: true });
     });
   });
+}
 
+function registerMiddlewareScoping(): void {
   describe('Nest wildcard-scoped middleware (createMiddlewareFactory)', () => {
     function register(adapter: CloudflareAdapter, path: string): boolean[] {
       const ran: boolean[] = [];
@@ -945,14 +987,14 @@ describe('CloudflareAdapter', () => {
       const adapter = new CloudflareAdapter();
       const ran = register(adapter, '/cats/{*path}');
       await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
 
     it("runs middleware scoped to Nest's '/cats/*path' wildcard form", async () => {
       const adapter = new CloudflareAdapter();
       const ran = register(adapter, '/cats/*path');
       await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
 
     it("treats Nest's whole-app '/{*path}' form as always-run", async () => {
@@ -974,7 +1016,7 @@ describe('CloudflareAdapter', () => {
         adapter.reply(res, { ok: true }),
       );
       await adapter.handle(new Request('https://example.com/anything'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
   });
 
@@ -1018,4 +1060,14 @@ describe('CloudflareAdapter', () => {
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ custom: true });
   });
+}
+
+describe('CloudflareAdapter', () => {
+  registerBasicRouting();
+  registerCorsAndStatic();
+  registerVersioningAndDeferred();
+  registerWildcardAndOrigin();
+  registerMutableFieldsAndErrors();
+  registerMultipartAndFilters();
+  registerMiddlewareScoping();
 });

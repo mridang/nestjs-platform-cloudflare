@@ -6,6 +6,17 @@
  * describe behaviour of the adapter (CORS, body parsing, static assets)
  * rather than a listening socket.
  */
+/** A single origin matcher: a string, a RegExp, or a list of either. */
+type OriginMatcher = string | RegExp | (string | RegExp)[];
+
+/** A function that decides whether an origin is allowed, in either style. */
+type OriginResolver =
+  | ((origin: string) => boolean | string)
+  | ((
+      origin: string,
+      callback: (err: Error | null, allow?: boolean | string) => void,
+    ) => void);
+
 export interface CloudflareHttpOptions {
   /**
    * Logical hostname to report for incoming requests when one cannot be
@@ -52,16 +63,7 @@ export interface CloudflareCorsOptions {
    * (`false`) it; a function resolves the allowed value, supporting both the
    * value-returning and Nest's callback-style (`(origin, cb)`) forms.
    */
-  origin?:
-    | string
-    | RegExp
-    | (string | RegExp)[]
-    | boolean
-    | ((origin: string) => boolean | string)
-    | ((
-        origin: string,
-        callback: (err: Error | null, allow?: boolean | string) => void,
-      ) => void);
+  origin?: OriginMatcher | boolean | OriginResolver;
   /** HTTP methods allowed for cross-origin requests (`Access-Control-Allow-Methods`). */
   methods?: string | string[];
   /** Request headers a client may send (`Access-Control-Allow-Headers`). */

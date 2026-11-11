@@ -3,27 +3,21 @@
 
 /**
  * @module @mridang/nestjs-platform-cloudflare
- *
  * NestJS HTTP adapter for the Cloudflare Workers runtime.
- *
  * This package provides a platform adapter that lets NestJS applications run
  * on the Cloudflare Workers `fetch` model without requiring Express, Fastify,
  * or other Node.js HTTP frameworks. Workers invoke the adapter through a
  * `fetch` export rather than by binding to a port.
- *
  * @example
  * ```ts
  * import { NestFactory } from '@nestjs/core';
  * import { CloudflareAdapter } from '@mridang/nestjs-platform-cloudflare';
  * import { AppModule } from './app.module.js';
- *
  * const adapter = new CloudflareAdapter();
  * const app = await NestFactory.create(AppModule, adapter);
  * await app.init();
- *
  * export default { fetch: (request: Request) => adapter.handle(request) };
  * ```
- *
  * @example Express Middleware Support
  * ```ts
  * import helmet from 'helmet';

@@ -173,8 +173,9 @@ describe('createExpressResponse', () => {
   it('set() with an array REPLACES rather than appends (Vary)', () => {
     const cfRes = mockResponse();
     const res = createExpressResponse(cfRes);
-    res.set('Vary', ['Accept']);
-    res.set('Vary', ['Origin']);
+    const setVary = (values: string[]) => res.set('Vary', values);
+    setVary(['Accept']);
+    setVary(['Origin']);
     expect(cfRes.getHeader('Vary')).toBe('Origin');
   });
 
@@ -201,7 +202,7 @@ describe('createExpressResponse', () => {
     res.cookie('b', '2');
     const read = res.get('set-cookie') as unknown as string[];
     expect(Array.isArray(read)).toBe(true);
-    expect(read.length).toBe(2);
+    expect(read).toHaveLength(2);
   });
 });
 
@@ -315,13 +316,15 @@ describe('wrapExpressMiddleware', () => {
   it('runs a 4-arg error handler when an error is propagated in, and resolves once it responds', async () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
-    let seenErr: unknown;
+    // Sentinel for "the error handler has not run"; undefined is a valid error value.
+    const notCalled = Symbol('not-called');
+    let seenErr: unknown = notCalled;
     // A 4-arg error handler that HANDLES the error by responding — the common
     // csurf/global-error-handler pattern. The wrapper must invoke it with the
     // propagated error (4th arg) and resolve once the response is produced,
     // rather than hanging.
     const errorHandler: ExpressErrorMiddleware = (err, _req, res, next) => {
-      void next; // declared only to mark this as a 4-arg error handler
+      expect(next).toBeInstanceOf(Function);
       seenErr = err;
       res.status(500).json({ caught: (err as Error).message });
     };
@@ -337,12 +340,12 @@ describe('wrapExpressMiddleware', () => {
 
     // Confirm it is NOT called on a normal pass (no propagated error): it just
     // advances the chain.
-    seenErr = undefined;
+    seenErr = notCalled;
     let nexted = false;
     await wrapped(cfReq, mockResponse(), () => {
       nexted = true;
     });
-    expect(seenErr).toBeUndefined();
+    expect(seenErr).toBe(notCalled);
     expect(nexted).toBe(true);
   });
 
@@ -386,7 +389,7 @@ describe('wrapExpressMiddleware', () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
     const rethrow: ExpressErrorMiddleware = (_err, _req, _res, next) => {
-      void next;
+      expect(next).toBeInstanceOf(Function);
       throw new Error('rethrown');
     };
 
@@ -408,14 +411,14 @@ describe('wrapExpressMiddleware', () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
     const errorHandler: ExpressErrorMiddleware = async (
-      err,
+      failure,
       _req,
       res,
       next,
     ) => {
-      void next; // declared only to mark this as a 4-arg error handler
+      expect(next).toBeInstanceOf(Function);
       await Promise.resolve();
-      res.status(403).json({ caught: (err as Error).message });
+      res.status(403).json({ caught: (failure as Error).message });
     };
     const wrapped = wrapExpressMiddleware(errorHandler);
 
