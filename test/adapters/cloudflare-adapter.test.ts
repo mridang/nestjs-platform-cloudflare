@@ -6,7 +6,16 @@ import {
   FetchAdapter,
   type CloudflareRequest,
   type CloudflareResponse,
+  type ExpressCompatRequest,
+  type ExpressCompatResponse,
+  type ExpressNextFunction,
 } from '../../src/index.js';
+
+type Req = CloudflareRequest;
+type Res = CloudflareResponse;
+type XReq = ExpressCompatRequest;
+type XRes = ExpressCompatResponse;
+type Next = ExpressNextFunction;
 
 function registerBasicRouting(): void {
   it('reports its type as "fetch"', () => {
@@ -240,7 +249,7 @@ function registerCorsAndStatic(): void {
 
   it('does not throw on a 204 response that still carries a body', async () => {
     const adapter = new CloudflareAdapter();
-    adapter.get('/no-content', (_req, res: CloudflareResponse) => {
+    adapter.get('/no-content', (_req: Req, res: Res) => {
       res.statusCode = 204;
       // a leftover body that the runtime would otherwise reject
       res.body = 'leftover';
@@ -259,7 +268,7 @@ function registerCorsAndStatic(): void {
   it('reaches a user @Options() route when CORS is enabled and it is not a preflight', async () => {
     const adapter = new CloudflareAdapter();
     adapter.enableCors({ origin: '*' });
-    adapter.options('/opt', (_req, res: CloudflareResponse) => {
+    adapter.options('/opt', (_req: Req, res: Res) => {
       adapter.reply(res, { handled: true });
     });
 
@@ -368,7 +377,7 @@ function registerVersioningAndDeferred(): void {
 
     it('still runs a plain single-handler route unchanged', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/plain', (_req, res: CloudflareResponse) => {
+      adapter.get('/plain', (_req: Req, res: Res) => {
         adapter.reply(res, { ok: true });
       });
       const res = await adapter.handle(
@@ -384,7 +393,7 @@ function registerVersioningAndDeferred(): void {
       const adapter = new CloudflareAdapter();
       // Returns synchronously, then settles the response on a later tick — the
       // documented @Res()/streaming pattern.
-      adapter.get('/deferred', (_req, res: CloudflareResponse) => {
+      adapter.get('/deferred', (_req: Req, res: Res) => {
         setTimeout(() => {
           res.statusCode = 202;
           res.body = 'later';
@@ -443,7 +452,7 @@ function registerVersioningAndDeferred(): void {
 
   it('returns 404 when a lone handler falls through by calling next()', async () => {
     const adapter = new CloudflareAdapter();
-    adapter.get('/fall', (_req, _res, next) => next());
+    adapter.get('/fall', (_req: Req, _res: Res, next: Next) => next());
 
     const res = await adapter.handle(new Request('https://example.com/fall'));
     expect(res.status).toBe(404);
@@ -454,7 +463,7 @@ function registerWildcardAndOrigin(): void {
   describe('wildcard / catch-all routes (path-to-regexp v8 syntax)', () => {
     it('matches @Get("{*path}") catch-all and captures the splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/{*path}', (req: CloudflareRequest, res) => {
+      adapter.get('/{*path}', (req: Req, res: Res) => {
         adapter.reply(res, { path: req.params.path });
       });
 
@@ -467,7 +476,7 @@ function registerWildcardAndOrigin(): void {
 
     it('matches @Get("*path") catch-all and captures the splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/*path', (req: CloudflareRequest, res) => {
+      adapter.get('/*path', (req: Req, res: Res) => {
         adapter.reply(res, { path: req.params.path });
       });
 
@@ -478,7 +487,7 @@ function registerWildcardAndOrigin(): void {
 
     it('matches a middle-segment splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/files/{*rest}/download', (req: CloudflareRequest, res) => {
+      adapter.get('/files/{*rest}/download', (req: Req, res: Res) => {
         adapter.reply(res, { rest: req.params.rest });
       });
 
@@ -491,7 +500,7 @@ function registerWildcardAndOrigin(): void {
 
     it('unwraps a literal brace group in a route path', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/users/{list}/:id', (req: CloudflareRequest, res) => {
+      adapter.get('/users/{list}/:id', (req: Req, res: Res) => {
         adapter.reply(res, { id: req.params.id });
       });
 
@@ -505,12 +514,9 @@ function registerWildcardAndOrigin(): void {
     it('unwraps every brace group in a long route path', async () => {
       const adapter = new CloudflareAdapter();
       const segments = 2000;
-      adapter.get(
-        `${'/{s}'.repeat(segments)}/:id`,
-        (req: CloudflareRequest, res) => {
-          adapter.reply(res, { id: req.params.id });
-        },
-      );
+      adapter.get(`${'/{s}'.repeat(segments)}/:id`, (req: Req, res: Res) => {
+        adapter.reply(res, { id: req.params.id });
+      });
 
       const res = await adapter.handle(
         new Request(`https://example.com${'/s'.repeat(segments)}/9`),
@@ -524,7 +530,7 @@ function registerWildcardAndOrigin(): void {
     it('restricts a RegExp origin and does not reflect a non-matching one', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: /\.example\.com$/ });
-      adapter.get('/r', (_req, res: CloudflareResponse) =>
+      adapter.get('/r', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -552,7 +558,7 @@ function registerWildcardAndOrigin(): void {
     it('matches a RegExp entry inside an origin array', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: ['https://a.test', /\.example\.com$/] });
-      adapter.get('/ra', (_req, res: CloudflareResponse) =>
+      adapter.get('/ra', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -574,7 +580,7 @@ function registerWildcardAndOrigin(): void {
           done: (err: Error | null, allow?: boolean | string) => void,
         ) => done(null, true),
       });
-      adapter.get('/cb', (_req, res: CloudflareResponse) =>
+      adapter.get('/cb', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -593,7 +599,7 @@ function registerWildcardAndOrigin(): void {
     it('sets Vary: Origin when the allow-origin is reflected', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: true });
-      adapter.get('/v2', (_req, res: CloudflareResponse) =>
+      adapter.get('/v2', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -630,7 +636,7 @@ function registerMutableFieldsAndErrors(): void {
     it('allows middleware to write to req.query when there is no query string', async () => {
       const adapter = new CloudflareAdapter();
       let threw = false;
-      adapter.use((req: CloudflareRequest, _res, next) => {
+      adapter.use((req: Req, _res: Res, next: Next) => {
         try {
           (req.query as Record<string, unknown>).page = '1';
         } catch {
@@ -638,7 +644,7 @@ function registerMutableFieldsAndErrors(): void {
         }
         next();
       });
-      adapter.get('/m', (req: CloudflareRequest, res) =>
+      adapter.get('/m', (req: Req, res: Res) =>
         adapter.reply(res, { page: req.query.page }),
       );
 
@@ -650,7 +656,7 @@ function registerMutableFieldsAndErrors(): void {
     it('allows handlers to write to req.params on a non-parametric route', async () => {
       const adapter = new CloudflareAdapter();
       let threw = false;
-      adapter.get('/p', (req: CloudflareRequest, res) => {
+      adapter.get('/p', (req: Req, res: Res) => {
         try {
           req.params.tenant = 'acme';
         } catch {
@@ -667,7 +673,7 @@ function registerMutableFieldsAndErrors(): void {
     it('allows writing to req.files and req.cookies when empty', async () => {
       const adapter = new CloudflareAdapter();
       let threw = false;
-      adapter.get('/fc', (req: CloudflareRequest, res) => {
+      adapter.get('/fc', (req: Req, res: Res) => {
         try {
           (req.cookies as Record<string, string>).sid = 'x';
           (req.files as Record<string, unknown>).f = new File([''], 'a.txt');
@@ -686,7 +692,7 @@ function registerMutableFieldsAndErrors(): void {
     it('routes next(err) from a normal middleware to a registered 4-arg error handler', async () => {
       const adapter = new CloudflareAdapter();
       // A normal 3-arg middleware that raises an error.
-      adapter.useExpressMiddleware((_req, _res, next) => {
+      adapter.useExpressMiddleware((_req: XReq, _res: XRes, next: Next) => {
         next(new Error('boom'));
       });
       // A standalone 4-arg Express error handler that catches it and responds.
@@ -703,7 +709,7 @@ function registerMutableFieldsAndErrors(): void {
           res.status(500).json({ caught: (failure as Error).message });
         },
       );
-      adapter.get('/x', (_req, res: CloudflareResponse) =>
+      adapter.get('/x', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -715,10 +721,10 @@ function registerMutableFieldsAndErrors(): void {
 
     it('falls through to the generic 500 when no error handler is registered', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.useExpressMiddleware((_req, _res, next) => {
+      adapter.useExpressMiddleware((_req: XReq, _res: XRes, next: Next) => {
         next(new Error('unhandled'));
       });
-      adapter.get('/y', (_req, res: CloudflareResponse) =>
+      adapter.get('/y', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -746,7 +752,7 @@ function registerMutableFieldsAndErrors(): void {
           res.status(500).json({ caught: (failure as Error).message });
         },
       );
-      adapter.get('/thrown', (_req, res: CloudflareResponse) =>
+      adapter.get('/thrown', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -774,7 +780,7 @@ function registerMutableFieldsAndErrors(): void {
           res.status(500).json({ caught: (failure as Error).message });
         },
       );
-      adapter.get('/rejected', (_req, res: CloudflareResponse) =>
+      adapter.get('/rejected', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -792,7 +798,7 @@ function registerMultipartAndFilters(): void {
     it('does not produce an unhandled rejection on a malformed multipart body', async () => {
       const adapter = new CloudflareAdapter();
       let seenBody: unknown;
-      adapter.post('/upload', (req: CloudflareRequest, res) => {
+      adapter.post('/upload', (req: Req, res: Res) => {
         seenBody = req.body;
         adapter.reply(res, { ok: true });
       });
@@ -901,8 +907,8 @@ function registerMultipartAndFilters(): void {
       const adapter = new CloudflareAdapter();
       // First route falls through via next(); second, differently-named route
       // must then run with ITS param name (`name`), not the first's (`id`).
-      adapter.get('/users/:id', (_req, _res, next) => next());
-      adapter.get('/users/:name', (req: CloudflareRequest, res) => {
+      adapter.get('/users/:id', (_req: Req, _res: Res, next: Next) => next());
+      adapter.get('/users/:name', (req: Req, res: Res) => {
         adapter.reply(res, {
           id: req.params.id ?? null,
           name: req.params.name ?? null,
@@ -923,7 +929,7 @@ function registerMultipartAndFilters(): void {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: '*' });
       // A no-op middleware so handle() builds the pipeline and applies CORS.
-      adapter.use((_req, _res, next) => next());
+      adapter.use((_req: Req, _res: Res, next: Next) => next());
 
       const res = await adapter.handle(
         new Request('https://example.com/unknown', {
@@ -937,7 +943,7 @@ function registerMultipartAndFilters(): void {
     it('keeps reflected ACAO + Vary on a 404 with a custom not-found handler', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: true });
-      adapter.use((_req, _res, next) => next());
+      adapter.use((_req: Req, _res: Res, next: Next) => next());
       adapter.setNotFoundHandler((_req, res) => {
         res.status(404);
         res.json({ custom: true });
@@ -974,10 +980,10 @@ function registerMiddlewareScoping(): void {
           next();
         },
       );
-      adapter.get('/cats/a/b', (_req, res: CloudflareResponse) =>
+      adapter.get('/cats/a/b', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
-      adapter.get('/cats', (_req, res: CloudflareResponse) =>
+      adapter.get('/cats', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
       return ran;
@@ -1012,7 +1018,7 @@ function registerMiddlewareScoping(): void {
           next();
         },
       );
-      adapter.get('/anything', (_req, res: CloudflareResponse) =>
+      adapter.get('/anything', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
       await adapter.handle(new Request('https://example.com/anything'));
@@ -1024,17 +1030,17 @@ function registerMiddlewareScoping(): void {
     it('runs middleware mounted at /api for /api AND nested /api/users', async () => {
       const adapter = new CloudflareAdapter();
       const seen: string[] = [];
-      adapter.use('/api', (req: CloudflareRequest, _res, next) => {
+      adapter.use('/api', (req: Req, _res: Res, next: Next) => {
         seen.push(req.path ?? '');
         next();
       });
-      adapter.get('/api', (_req, res: CloudflareResponse) =>
+      adapter.get('/api', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
-      adapter.get('/api/users', (_req, res: CloudflareResponse) =>
+      adapter.get('/api/users', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
-      adapter.get('/other', (_req, res: CloudflareResponse) =>
+      adapter.get('/other', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -1050,7 +1056,7 @@ function registerMiddlewareScoping(): void {
     const adapter = new CloudflareAdapter();
     // A middleware is needed so handle() builds a request pipeline rather than
     // short-circuiting; the not-found handler then formats the 404.
-    adapter.use((_req, _res, next) => next());
+    adapter.use((_req: Req, _res: Res, next: Next) => next());
     adapter.setNotFoundHandler((_req, res) => {
       res.status(404);
       res.json({ custom: true });
