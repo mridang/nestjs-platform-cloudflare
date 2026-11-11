@@ -201,7 +201,7 @@ describe('createExpressResponse', () => {
     res.cookie('b', '2');
     const read = res.get('set-cookie') as unknown as string[];
     expect(Array.isArray(read)).toBe(true);
-    expect(read.length).toBe(2);
+    expect(read).toHaveLength(2);
   });
 });
 
@@ -315,7 +315,9 @@ describe('wrapExpressMiddleware', () => {
   it('runs a 4-arg error handler when an error is propagated in, and resolves once it responds', async () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
-    let seenErr: unknown;
+    // Sentinel for "the error handler has not run"; undefined is a valid error value.
+    const notCalled = Symbol('not-called');
+    let seenErr: unknown = notCalled;
     // A 4-arg error handler that HANDLES the error by responding — the common
     // csurf/global-error-handler pattern. The wrapper must invoke it with the
     // propagated error (4th arg) and resolve once the response is produced,
@@ -337,12 +339,12 @@ describe('wrapExpressMiddleware', () => {
 
     // Confirm it is NOT called on a normal pass (no propagated error): it just
     // advances the chain.
-    seenErr = undefined;
+    seenErr = notCalled;
     let nexted = false;
     await wrapped(cfReq, mockResponse(), () => {
       nexted = true;
     });
-    expect(seenErr).toBeUndefined();
+    expect(seenErr).toBe(notCalled);
     expect(nexted).toBe(true);
   });
 

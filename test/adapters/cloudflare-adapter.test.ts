@@ -428,7 +428,7 @@ describe('CloudflareAdapter', () => {
             headers: { 'x-api-version': '1' },
           }),
         ),
-        new Promise<Response>((_r, reject) =>
+        new Promise<Response>((_resolve, reject) =>
           setTimeout(() => reject(new Error('request hung')), 1000),
         ),
       ]);
@@ -785,16 +785,16 @@ describe('CloudflareAdapter', () => {
       // An async exception filter: it awaits before writing the response, on a
       // later tick. handle() must await res.settled so the intended body is
       // produced before the Response is built.
-      adapter.setErrorHandler((error: Error, _req, res: CloudflareResponse) => {
-        void (async () => {
+      adapter.setErrorHandler(
+        async (error: Error, _req, res: CloudflareResponse) => {
           await Promise.resolve();
           res.statusCode = 500;
           res.setHeader('content-type', 'application/json; charset=utf-8');
           res.body = JSON.stringify({ filtered: error.message });
           res.sent = true;
           (res as CloudflareResponse & { settle: () => void }).settle();
-        })();
-      });
+        },
+      );
       adapter.get('/boom', () => {
         throw new Error('handler-failed');
       });
@@ -945,14 +945,14 @@ describe('CloudflareAdapter', () => {
       const adapter = new CloudflareAdapter();
       const ran = register(adapter, '/cats/{*path}');
       await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
 
     it("runs middleware scoped to Nest's '/cats/*path' wildcard form", async () => {
       const adapter = new CloudflareAdapter();
       const ran = register(adapter, '/cats/*path');
       await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
 
     it("treats Nest's whole-app '/{*path}' form as always-run", async () => {
@@ -974,7 +974,7 @@ describe('CloudflareAdapter', () => {
         adapter.reply(res, { ok: true }),
       );
       await adapter.handle(new Request('https://example.com/anything'));
-      expect(ran.length).toBe(1);
+      expect(ran).toHaveLength(1);
     });
   });
 

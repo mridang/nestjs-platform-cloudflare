@@ -3,6 +3,15 @@ import type {
   CloudflareResponse,
 } from '../adapters/cloudflare-adapter.js';
 
+/** A single header value, or several values for a repeated header. */
+type HeaderValue = string | string[];
+
+/** A header value, or `undefined` when the header is absent. */
+type OptionalHeaderValue = HeaderValue | undefined;
+
+/** Values accepted by the `sameSite` cookie attribute, besides a boolean. */
+type SameSiteValue = 'lax' | 'strict' | 'none';
+
 /**
  * Express-compatible request object.
  *
@@ -30,7 +39,7 @@ export interface ExpressCompatRequest {
   /** Whether the request was made over a secure (TLS) connection. */
   secure: boolean;
   /** Request headers, lower-cased and grouped (array for repeated keys). */
-  headers: Record<string, string | string[] | undefined>;
+  headers: Record<string, OptionalHeaderValue>;
 
   /** Route parameters extracted from the matched path. */
   params: Record<string, string | undefined>;
@@ -154,17 +163,14 @@ export interface ExpressCompatResponse {
    * @param value - Value to set; omit to read the current value.
    * @returns This response when setting, or the header value when reading.
    */
-  header(
-    field: string,
-    value?: string | string[],
-  ): this | string | string[] | undefined;
+  header(field: string, value?: string | string[]): this | OptionalHeaderValue;
 
   /**
    * Read a response header value.
    * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
-  get(field: string): string | string[] | undefined;
+  get(field: string): OptionalHeaderValue;
 
   /**
    * Append a value to a header without replacing existing values.
@@ -186,7 +192,7 @@ export interface ExpressCompatResponse {
    * @param field - Header name.
    * @returns The header value, or `undefined` if absent.
    */
-  getHeader(field: string): string | number | string[] | undefined;
+  getHeader(field: string): number | OptionalHeaderValue;
 
   /**
    * Node `http.ServerResponse`-style header remover.
@@ -311,7 +317,7 @@ export interface CookieOptions {
   /** `Path` attribute scoping the cookie (defaults to `/`). */
   path?: string;
   /** `SameSite` attribute; `true` maps to `Strict`. */
-  sameSite?: boolean | 'lax' | 'strict' | 'none';
+  sameSite?: boolean | SameSiteValue;
   /** Whether to set the `Secure` attribute. */
   secure?: boolean;
   /** Whether the cookie should be signed. */
@@ -432,7 +438,7 @@ function parseAccept(
       });
       return { type: type.trim(), quality };
     })
-    .sort((a, b) => b.quality - a.quality);
+    .toSorted((a, b) => b.quality - a.quality);
 
   for (const accept of accepts) {
     for (const type of types) {
@@ -539,7 +545,7 @@ export function createExpressRequest(
 
     xhr:
       cfReq.headers.get('x-requested-with')?.toLowerCase() === 'xmlhttprequest',
-    subdomains: cfReq.hostname?.split('.').slice(0, -2).reverse() || [],
+    subdomains: cfReq.hostname?.split('.').slice(0, -2).toReversed() || [],
 
     get(name: string): string | undefined {
       const key = name.toLowerCase();
@@ -548,7 +554,7 @@ export function createExpressRequest(
     },
 
     header(name: string): string | undefined {
-      return this.get(name);
+      return req.get(name);
     },
 
     is(type: string | string[]): string | false | null {
@@ -612,11 +618,11 @@ export function createExpressRequest(
  * @param cfRes - The adapter response to wrap.
  * @returns An Express-shaped response that writes through to `cfRes`.
  */
+// eslint-disable-next-line sonarjs/max-lines-per-function -- logic rewrite would be large: keep this settle-once Promise wrapper
 export function createExpressResponse(
   cfRes: CloudflareResponse,
 ): ExpressCompatResponse {
   let statusMessage = 'OK';
-  const cookies: string[] = [];
 
   const res: ExpressCompatResponse = {
     get statusCode() {
@@ -639,13 +645,13 @@ export function createExpressResponse(
     status(code: number) {
       cfRes.status(code);
       statusMessage = STATUS_MESSAGES[code] || 'Unknown';
-      return this;
+      return res;
     },
 
     sendStatus(code: number) {
-      this.status(code);
+      res.status(code);
       cfRes.send(STATUS_MESSAGES[code] || String(code));
-      return this;
+      return res;
     },
 
     set(
@@ -662,26 +668,26 @@ export function createExpressResponse(
             cfRes.setHeader(key, val);
           }
         });
-      } else if (value !== undefined) {
-        if (Array.isArray(value)) {
-          // Replace semantics: discard any prior value, then append each item.
-          cfRes.removeHeader(field);
-          value.forEach((v) => cfRes.headers.append(field, v));
-        } else {
-          cfRes.setHeader(field, value);
-        }
+      } else if (value === undefined) {
+        // No value to set and no header map given: nothing to do.
+      } else if (Array.isArray(value)) {
+        // Replace semantics: discard any prior value, then append each item.
+        cfRes.removeHeader(field);
+        value.forEach((v) => cfRes.headers.append(field, v));
+      } else {
+        cfRes.setHeader(field, value);
       }
-      return this;
+      return res;
     },
 
     header(
       field: string,
       value?: string | string[],
-    ): string | string[] | undefined | ExpressCompatResponse {
+    ): OptionalHeaderValue | ExpressCompatResponse {
       if (value === undefined) {
-        return this.get(field);
+        return res.get(field);
       }
-      return this.set(field, value);
+      return res.set(field, value);
     },
 
     get(field: string) {
@@ -728,7 +734,7 @@ export function createExpressResponse(
       } else {
         cfRes.headers.append(field, value);
       }
-      return this;
+      return res;
     },
 
     send(body?: unknown) {
@@ -746,22 +752,22 @@ export function createExpressResponse(
 
         cfRes.send(body as unknown as BodyInit);
       } else if (typeof body === 'object') {
-        return this.json(body);
+        return res.json(body);
       } else {
         cfRes.send(String(body));
       }
-      return this;
+      return res;
     },
 
     json(body?: unknown) {
       cfRes.json(body);
-      return this;
+      return res;
     },
 
     jsonp(body?: unknown) {
       // For JSONP we would wrap in a callback; send as JSON for now.
       cfRes.json(body);
-      return this;
+      return res;
     },
 
     end(data?: unknown) {
@@ -770,7 +776,7 @@ export function createExpressResponse(
       } else {
         cfRes.end(typeof data === 'string' ? data : JSON.stringify(data));
       }
-      return this;
+      return res;
     },
 
     redirect(statusOrUrl: number | string, url?: string) {
@@ -778,6 +784,8 @@ export function createExpressResponse(
         cfRes.redirect(url, statusOrUrl);
       } else if (typeof statusOrUrl === 'string') {
         cfRes.redirect(statusOrUrl, 302);
+      } else {
+        // Neither a status with a URL nor a bare URL: nothing to redirect to.
       }
     },
 
@@ -792,28 +800,27 @@ export function createExpressResponse(
       };
       const contentType = mimeTypes[type] || type;
       cfRes.setHeader('Content-Type', contentType);
-      return this;
+      return res;
     },
 
     contentType(type: string) {
-      return this.type(type);
+      return res.type(type);
     },
 
     cookie(name: string, value: string, options: CookieOptions = {}) {
       const cookieStr = serializeCookie(name, value, options);
-      cookies.push(cookieStr);
       cfRes.headers.append('Set-Cookie', cookieStr);
-      return this;
+      return res;
     },
 
     clearCookie(name: string, options: CookieOptions = {}) {
       const clearOptions = { ...options, expires: new Date(0), maxAge: 0 };
-      return this.cookie(name, '', clearOptions);
+      return res.cookie(name, '', clearOptions);
     },
 
     location(url: string) {
       cfRes.setHeader('Location', url);
-      return this;
+      return res;
     },
 
     links(links: Record<string, string>) {
@@ -821,7 +828,7 @@ export function createExpressResponse(
         .map(([rel, href]) => `<${href}>; rel="${rel}"`)
         .join(', ');
       cfRes.setHeader('Link', linkHeader);
-      return this;
+      return res;
     },
 
     vary(field: string) {
@@ -831,7 +838,7 @@ export function createExpressResponse(
       } else {
         cfRes.setHeader('Vary', field);
       }
-      return this;
+      return res;
     },
 
     format(obj: Record<string, () => void>) {
@@ -843,8 +850,10 @@ export function createExpressResponse(
         obj[matched]();
       } else if (obj.default) {
         obj.default();
+      } else {
+        // No handler matched the Accept header and there is no default.
       }
-      return this;
+      return res;
     },
   };
 
@@ -899,6 +908,7 @@ export function wrapExpressMiddleware(
         // Always forward (with or without an error) to the chain; the chain
         // decides whether a downstream error handler exists. resolve() here so
         // this wrapper's promise settles once control has passed on.
+        // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
         next(err);
         resolve();
       };
@@ -907,6 +917,7 @@ export function wrapExpressMiddleware(
       if (isErrorMiddleware) {
         if (incomingErr === undefined) {
           // Normal path: skip the error handler and advance the chain.
+          // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
           next();
           resolve();
           return;
@@ -923,6 +934,7 @@ export function wrapExpressMiddleware(
               .then(() => {
                 // The handler responded (or returned without calling next):
                 // settle the wrapper so the chain can finish.
+                // eslint-disable-next-line sonarjs/nested-control-flow, promise/always-return -- logic rewrite would be large: keep this settle-once Promise wrapper
                 if (cfRes.sent) {
                   resolve();
                 }
@@ -930,14 +942,19 @@ export function wrapExpressMiddleware(
               // A throw/reject from an error handler is itself an error in
               // flight: forward it down the chain (Express routes it to the
               // next error handler) instead of rejecting the wrapper.
+              // eslint-disable-next-line promise/prefer-await-to-callbacks -- logic rewrite would be large: keep this settle-once Promise wrapper
               .catch((error) => {
+                // eslint-disable-next-line promise/no-callback-in-promise, n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
                 next(error);
                 resolve();
               });
           } else if (cfRes.sent) {
             resolve();
+          } else {
+            // The response is still pending; the chain resumes once it is sent.
           }
         } catch (error) {
+          // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
           next(error);
           resolve();
         }
@@ -953,6 +970,7 @@ export function wrapExpressMiddleware(
         if (result instanceof Promise) {
           result
             .then(() => {
+              // eslint-disable-next-line promise/always-return -- logic rewrite would be large: keep this settle-once Promise wrapper
               if (cfRes.sent) resolve();
             })
             // In real Express, a thrown/rejected error from a normal (3-arg)
@@ -960,14 +978,19 @@ export function wrapExpressMiddleware(
             // advances to the next downstream error handler, instead of
             // rejecting the wrapper (which would skip straight to the
             // catch-all 500).
+            // eslint-disable-next-line promise/prefer-await-to-callbacks -- logic rewrite would be large: keep this settle-once Promise wrapper
             .catch((error) => {
+              // eslint-disable-next-line promise/no-callback-in-promise, n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
               next(error);
               resolve();
             });
         } else if (cfRes.sent) {
           resolve();
+        } else {
+          // The response is still pending; the chain resumes once it is sent.
         }
       } catch (error) {
+        // eslint-disable-next-line n/callback-return -- logic rewrite would be large: keep this settle-once Promise wrapper
         next(error);
         resolve();
       }

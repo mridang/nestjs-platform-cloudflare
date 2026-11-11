@@ -137,10 +137,9 @@ describe('wrapFastifyHook', () => {
     let ran = false;
     let nexted = false;
 
-    const hook: FastifyHook = async (request, reply) => {
+    const hook: FastifyHook = async (_request, reply) => {
       ran = true;
       reply.header('x-hook', 'async');
-      void request;
     };
 
     await wrapFastifyHook(hook)(cfReq, cfRes, () => {

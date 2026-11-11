@@ -3,6 +3,12 @@ import type {
   CloudflareResponse,
 } from '../adapters/cloudflare-adapter.js';
 
+/** A header value, or `undefined` when the header is absent. */
+type OptionalHeaderValue = string | string[] | undefined;
+
+/** A value accepted by `reply.header()`. */
+type FastifyHeaderInput = string | number | boolean;
+
 /**
  * Fastify-compatible request object.
  *
@@ -20,7 +26,7 @@ export interface FastifyCompatRequest {
   /** Parsed request body. */
   body: unknown;
   /** Request headers, lower-cased and grouped (array for repeated keys). */
-  headers: Record<string, string | string[] | undefined>;
+  headers: Record<string, OptionalHeaderValue>;
   /** The underlying native Web `Request`. */
   raw: Request;
 
@@ -82,27 +88,27 @@ export interface FastifyCompatReply {
    * @param value - Header value.
    * @returns This reply, for chaining.
    */
-  header(key: string, value: string | number | boolean): this;
+  header(key: string, value: FastifyHeaderInput): this;
 
   /**
    * Set multiple response headers at once.
    * @param headers - Map of header names to values.
    * @returns This reply, for chaining.
    */
-  headers(headers: Record<string, string | number | boolean>): this;
+  headers(headers: Record<string, FastifyHeaderInput>): this;
 
   /**
    * Read a response header value.
    * @param key - Header name.
    * @returns The header value, or `undefined` if absent.
    */
-  getHeader(key: string): string | string[] | undefined;
+  getHeader(key: string): OptionalHeaderValue;
 
   /**
    * Read all response headers as a plain object.
    * @returns The current response headers.
    */
-  getHeaders(): Record<string, string | string[] | undefined>;
+  getHeaders(): Record<string, OptionalHeaderValue>;
 
   /**
    * Remove a response header.
@@ -424,7 +430,8 @@ let requestIdCounter = 0;
  * @returns A request id of the form `req-<timestamp>-<counter>`.
  */
 function generateRequestId(): string {
-  return `req-${Date.now()}-${++requestIdCounter}`;
+  requestIdCounter += 1;
+  return `req-${Date.now()}-${requestIdCounter}`;
 }
 
 /**
@@ -511,23 +518,23 @@ export function createFastifyReply(
 
     code(statusCode: number) {
       cfRes.status(statusCode);
-      return this;
+      return reply;
     },
 
     status(statusCode: number) {
-      return this.code(statusCode);
+      return reply.code(statusCode);
     },
 
     header(key: string, value: string | number | boolean) {
       cfRes.setHeader(key, String(value));
-      return this;
+      return reply;
     },
 
     headers(headers: Record<string, string | number | boolean>) {
       Object.entries(headers).forEach(([key, value]) => {
         cfRes.setHeader(key, String(value));
       });
-      return this;
+      return reply;
     },
 
     getHeader(key: string) {
@@ -540,7 +547,7 @@ export function createFastifyReply(
     },
 
     getHeaders() {
-      const result: Record<string, string | string[] | undefined> = {};
+      const result: Record<string, OptionalHeaderValue> = {};
       cfRes.headers.forEach((value, key) => {
         result[key] = value;
       });
@@ -553,7 +560,7 @@ export function createFastifyReply(
 
     removeHeader(key: string) {
       cfRes.removeHeader(key);
-      return this;
+      return reply;
     },
 
     hasHeader(key: string) {
@@ -585,7 +592,7 @@ export function createFastifyReply(
       } else {
         cfRes.send(String(payload));
       }
-      return this;
+      return reply;
     },
 
     serialize(payload: unknown) {
@@ -594,12 +601,12 @@ export function createFastifyReply(
 
     serializer(fn: (payload: unknown) => string) {
       serializer = fn;
-      return this;
+      return reply;
     },
 
     type(contentType: string) {
       cfRes.setHeader('Content-Type', contentType);
-      return this;
+      return reply;
     },
 
     redirect(statusCodeOrUrl: number | string, url?: string) {
@@ -607,8 +614,10 @@ export function createFastifyReply(
         cfRes.redirect(url, statusCodeOrUrl);
       } else if (typeof statusCodeOrUrl === 'string') {
         cfRes.redirect(statusCodeOrUrl, 302);
+      } else {
+        // Neither a status with a URL nor a bare URL: nothing to redirect to.
       }
-      return this;
+      return reply;
     },
 
     callNotFound() {
@@ -664,7 +673,7 @@ export function wrapFastifyHook(
         next();
       }
     } else {
-      return new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const done: FastifyDoneCallback = (err?: Error) => {
           if (err) {
             reject(err);
