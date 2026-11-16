@@ -327,19 +327,19 @@ function serializeSetCookie(
  */
 function headerProxy(headers: Headers): Headers {
   return new Proxy(headers, {
-    get(target, prop, receiver) {
-      if (typeof prop === 'string' && !(prop in target)) {
-        const value = target.get(prop);
+    get(target, property, receiver) {
+      if (typeof property === 'string' && !(property in target)) {
+        const value = target.get(property);
         return value === null ? undefined : value;
       }
-      const value = Reflect.get(target, prop, receiver);
+      const value = Reflect.get(target, property, receiver);
       return typeof value === 'function' ? value.bind(target) : value;
     },
-    has(target, prop) {
-      if (typeof prop === 'string' && target.has(prop)) {
+    has(target, property) {
+      if (typeof property === 'string' && target.has(property)) {
         return true;
       }
-      return Reflect.has(target, prop);
+      return Reflect.has(target, property);
     },
   }) as Headers;
 }
@@ -410,7 +410,7 @@ function nodeStreamToWeb(nodeStream: NodeStreamLike): WebByteStream {
     return ctor.toWeb(nodeStream) as WebByteStream;
   }
   const stream = nodeStream as {
-    on(event: string, cb: (arg?: unknown) => void): void;
+    on(event: string, callback: (arg?: unknown) => void): void;
   };
 
   return new ReadableStream<Uint8Array>({
@@ -862,12 +862,12 @@ function buildRouteHandler(
     const fastifyReq = createFastifyRequest(req);
     const fastifyReply = createFastifyReply(res);
 
-    Object.entries(requestDecorators).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(requestDecorators)) {
       fastifyReq[key] = typeof value === 'function' ? value() : value;
-    });
-    Object.entries(replyDecorators).forEach(([key, value]) => {
+    }
+    for (const [key, value] of Object.entries(replyDecorators)) {
       fastifyReply[key] = typeof value === 'function' ? value() : value;
-    });
+    }
 
     const hooks = [
       ...toHookList(opts.onRequest),
@@ -1176,7 +1176,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public all(...args: readonly unknown[]): void {
-    ALL_VERBS.forEach((verb) => this.register(verb, args));
+    for (const verb of ALL_VERBS) this.register(verb, args);
   }
 
   /**
@@ -1333,7 +1333,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       path: string,
       handlers: ExpressMiddleware[],
     ): void => {
-      handlers.forEach((handler) => {
+      for (const handler of handlers) {
         method.call(this, path, async (req, res) => {
           await handler(
             createExpressRequest(req),
@@ -1341,7 +1341,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
             () => {},
           );
         });
-      });
+      }
     };
 
     const app: ExpressLikeApp = {
@@ -1360,11 +1360,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         } else if (args.length >= 2) {
           const path = typeof args[0] === 'string' ? args[0] : '*';
           const handlers = typeof args[0] === 'string' ? args.slice(1) : args;
-          handlers.forEach((handler) => {
+          for (const handler of handlers) {
             if (typeof handler === 'function') {
               this.useExpressMiddleware(path, handler as ExpressMiddleware);
             }
-          });
+          }
         } else {
           // Calls without a usable middleware argument are ignored.
         }
@@ -1520,14 +1520,14 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           ? opts.method
           : [opts.method];
 
-        methods.forEach((method) => {
+        for (const method of methods) {
           const register =
             routeRegistrars.get(method.toUpperCase()) ?? allRoute;
           register(
             opts.url,
             buildRouteHandler(opts, requestDecorators, replyDecorators),
           );
-        });
+        }
 
         return instance;
       },
@@ -2754,7 +2754,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       'content-type': 'application/json; charset=utf-8',
     });
     if (corsRes) {
-      corsRes.headers.forEach((value, key) => headers.append(key, value));
+      for (const [key, value] of corsRes.headers.entries())
+        headers.append(key, value);
     }
     return Response.json(
       {
@@ -2845,7 +2846,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         (
           fn as (
             o: string,
-            cb: (e: Error | null, a?: boolean | string) => void,
+            callback: (error: Error | null, a?: boolean | string) => void,
           ) => void
         )(requestOrigin, (_err, allow) => {
           resolved = originFromAllow(allow, requestOrigin);
@@ -2876,7 +2877,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     if (!from) {
       return;
     }
-    from.headers.forEach((value, key) => to.headers.append(key, value));
+    for (const [key, value] of from.headers.entries())
+      to.headers.append(key, value);
   }
 
   /**
@@ -2959,11 +2961,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         return req.get(options.header);
       }
       case VersioningType.MEDIA_TYPE: {
-        const param = (req.get('accept') ?? '')
+        const parameter = (req.get('accept') ?? '')
           .split(';')
           .map((part) => part.trim())
           .find((part) => part.startsWith(options.key));
-        return param ? param.slice(options.key.length) : null;
+        return parameter ? parameter.slice(options.key.length) : null;
       }
       case VersioningType.CUSTOM: {
         return options.extractor(req);
