@@ -2,8 +2,8 @@
  * @file Cloudflare Workers HTTP adapter that routes native Web requests through NestJS.
  */
 import { AbstractHttpAdapter } from '@nestjs/core';
-import { RequestMethod, VERSION_NEUTRAL, VersioningType } from '@nestjs/common';
-import type { VersioningOptions } from '@nestjs/common';
+import { VERSION_NEUTRAL, VersioningType } from '@nestjs/common';
+import type { VersioningOptions, RequestMethod } from '@nestjs/common';
 import type {
   CloudflareHttpServer,
   CloudflareCorsOptions,
@@ -67,9 +67,9 @@ interface URLPatternInstance {
 }
 
 /** Ambient declaration of the native Workers `URLPattern` constructor. */
-declare const URLPattern: {
-  new (init: { pathname: string }): URLPatternInstance;
-};
+declare const URLPattern: new (init: {
+  pathname: string;
+}) => URLPatternInstance;
 
 // Promise.withResolvers (ES2024) — declared ambiently to avoid pulling the
 // ESNext lib, which conflicts with @types/node's iterator typings here.
@@ -332,8 +332,10 @@ function headerProxy(headers: Headers): Headers {
         const value = target.get(property);
         return value === null ? undefined : value;
       }
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, property, receiver);
+      return typeof value === 'function'
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
     },
     has(target, property) {
       if (typeof property === 'string' && target.has(property)) {
@@ -341,7 +343,7 @@ function headerProxy(headers: Headers): Headers {
       }
       return Reflect.has(target, property);
     },
-  }) as Headers;
+  });
 }
 
 /** The subset of Nest's `StreamableFile` the adapter reads. */
@@ -441,11 +443,12 @@ type BufferedResponse = CloudflareResponse & {
 /** A connect-style continuation callback; an error short-circuits the chain. */
 type Next = (err?: unknown) => void;
 
-/** A request handler in the adapter's internal `(req, res, next)` shape. */
+/** A request handler in the adapter's internal `(req, res, next)` shape; error handlers also receive the error. */
 type Handler = (
   req: CloudflareRequest,
   res: CloudflareResponse,
   next: Next,
+  err?: unknown,
 ) => unknown;
 
 /** Route parameters extracted from a matched path. */
@@ -805,7 +808,7 @@ function toHookList<T>(hooks: T | T[] | undefined): T[] {
   if (!hooks) {
     return [];
   }
-  return Array.isArray(hooks) ? (hooks as T[]) : [hooks as T];
+  return Array.isArray(hooks) ? hooks : [hooks];
 }
 
 /**
@@ -822,7 +825,7 @@ function toHookList<T>(hooks: T | T[] | undefined): T[] {
  * }, request, reply);
  * ```
  */
-function runFastifyHook(
+async function runFastifyHook(
   hook: FastifyHook,
   request: FastifyCompatRequest,
   reply: FastifyCompatReply,
@@ -863,10 +866,12 @@ function buildRouteHandler(
     const fastifyReply = createFastifyReply(res);
 
     for (const [key, value] of Object.entries(requestDecorators)) {
-      fastifyReq[key] = typeof value === 'function' ? value() : value;
+      fastifyReq[key] =
+        typeof value === 'function' ? (value as () => unknown)() : value;
     }
     for (const [key, value] of Object.entries(replyDecorators)) {
-      fastifyReply[key] = typeof value === 'function' ? value() : value;
+      fastifyReply[key] =
+        typeof value === 'function' ? (value as () => unknown)() : value;
     }
 
     const hooks = [
@@ -1370,15 +1375,22 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         }
       },
 
-      get: (path, ...handlers) => registerRoute(this.get, path, handlers),
-      post: (path, ...handlers) => registerRoute(this.post, path, handlers),
-      put: (path, ...handlers) => registerRoute(this.put, path, handlers),
-      delete: (path, ...handlers) => registerRoute(this.delete, path, handlers),
-      patch: (path, ...handlers) => registerRoute(this.patch, path, handlers),
+      get: (path, ...handlers) =>
+        registerRoute(this.get.bind(this), path, handlers),
+      post: (path, ...handlers) =>
+        registerRoute(this.post.bind(this), path, handlers),
+      put: (path, ...handlers) =>
+        registerRoute(this.put.bind(this), path, handlers),
+      delete: (path, ...handlers) =>
+        registerRoute(this.delete.bind(this), path, handlers),
+      patch: (path, ...handlers) =>
+        registerRoute(this.patch.bind(this), path, handlers),
       options: (path, ...handlers) =>
-        registerRoute(this.options, path, handlers),
-      head: (path, ...handlers) => registerRoute(this.head, path, handlers),
-      all: (path, ...handlers) => registerRoute(this.all, path, handlers),
+        registerRoute(this.options.bind(this), path, handlers),
+      head: (path, ...handlers) =>
+        registerRoute(this.head.bind(this), path, handlers),
+      all: (path, ...handlers) =>
+        registerRoute(this.all.bind(this), path, handlers),
 
       set(key, value) {
         settings[key] = value;
@@ -1764,7 +1776,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public setHeader(res: CloudflareResponse, name: string, value: string): void {
-    res.headers.set(name, String(value));
+    res.headers.set(name, value);
   }
 
   /**
@@ -1796,7 +1808,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     name: string,
     value: string,
   ): void {
-    res.headers.append(name, String(value));
+    res.headers.append(name, value);
   }
 
   /**
@@ -1864,10 +1876,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    */
   public initHttpServer(): void {
     this.server = {
-      handle: (request) => this.handle(request),
+      handle: async (request) => this.handle(request),
       finished: Promise.resolve(),
     };
-    this.httpServer = this.server as never;
+    this.httpServer = this.server;
   }
 
   /**
@@ -1915,7 +1927,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    */
   public setHttpServer(server: CloudflareHttpServer): void {
     this.server = server;
-    this.httpServer = server as never;
+    this.httpServer = server;
   }
 
   /**
@@ -1926,8 +1938,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * await adapter.close();
    * ```
    */
-  public close(): Promise<void> {
-    return Promise.resolve();
+  public async close(): Promise<void> {
+    return;
   }
 
   /**
@@ -2019,8 +2031,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         return run(req, res, next) as Function;
       }
       next();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest expects an untyped Function return value
-      return (() => undefined) as Function;
+
+      return () => undefined;
     };
   }
 
@@ -2208,8 +2220,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
             return;
           }
           advanced = true;
+          const reason: unknown = err;
           if (err) {
-            reject(err);
+            reject(reason);
           } else {
             dispatch(index + 1);
           }
@@ -2441,7 +2454,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         return res;
       },
       setHeader(name, value) {
-        headers.set(name, String(value));
+        headers.set(name, value);
         return res;
       },
       getHeader(name) {
@@ -2532,7 +2545,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * await this.runMiddleware(req, res, url);
    * ```
    */
-  private runMiddleware(
+  private async runMiddleware(
     req: CloudflareRequest,
     res: CloudflareResponse,
     url: URL,
@@ -2553,10 +2566,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         if (index >= chain.length) {
           // Chain exhausted: if an unhandled error is still in flight, surface
           // it; otherwise the chain simply fell through to routing.
+          const reason: unknown = err;
           if (err === undefined) {
             resolve();
           } else {
-            reject(err);
+            reject(reason);
           }
           return;
         }
@@ -2585,14 +2599,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           dispatch(index + 1, nextErr);
         };
         try {
-          const result = (
-            entry.fn as (
-              req: CloudflareRequest,
-              res: CloudflareResponse,
-              next: Next,
-              err?: unknown,
-            ) => unknown
-          )(req, res, next, err);
+          const result = entry.fn(req, res, next, err);
           if (result instanceof Promise) {
             // A middleware that responded without calling next() (e.g. a guard, or an
             // error handler that sent a response) ends here.
@@ -2843,12 +2850,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       // simpler value-returning form by branching on arity.
       if (fn.length >= 2) {
         let resolved = '';
-        (
-          fn as (
-            o: string,
-            callback: (error: Error | null, a?: boolean | string) => void,
-          ) => void
-        )(requestOrigin, (_err, allow) => {
+        fn(requestOrigin, (_err, allow) => {
           resolved = originFromAllow(allow, requestOrigin);
         });
         return resolved;

@@ -243,7 +243,7 @@ describe('wrapExpressMiddleware', () => {
     await wrappedParser(cfReq, cfRes, () => {});
 
     const capture: ExpressMiddleware = (req, _res, next) => {
-      captured = req.cookies as Record<string, string>;
+      captured = req.cookies!;
       next();
     };
     await wrapExpressMiddleware(capture)(cfReq, cfRes, () => {});

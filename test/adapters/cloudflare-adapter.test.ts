@@ -1,6 +1,6 @@
 import 'urlpattern-polyfill';
 import { describe, it, expect } from '@jest/globals';
-import { VersioningType, VERSION_NEUTRAL } from '@nestjs/common';
+import { RequestMethod, VersioningType, VERSION_NEUTRAL } from '@nestjs/common';
 import {
   CloudflareAdapter,
   FetchAdapter,
@@ -319,14 +319,8 @@ function registerVersioningAndDeferred(): void {
       const v2 = (_req: CloudflareRequest, res: CloudflareResponse) =>
         adapter.reply(res, { version: 'v2' });
 
-      adapter.get(
-        '/versioned',
-        adapter.applyVersionFilter(v1, '1', options) as never,
-      );
-      adapter.get(
-        '/versioned',
-        adapter.applyVersionFilter(v2, '2', options) as never,
-      );
+      adapter.get('/versioned', adapter.applyVersionFilter(v1, '1', options));
+      adapter.get('/versioned', adapter.applyVersionFilter(v2, '2', options));
       return adapter;
     }
 
@@ -368,7 +362,7 @@ function registerVersioningAndDeferred(): void {
         adapter.reply(res, { neutral: true });
       adapter.get(
         '/n',
-        adapter.applyVersionFilter(neutral, VERSION_NEUTRAL, options) as never,
+        adapter.applyVersionFilter(neutral, VERSION_NEUTRAL, options),
       );
 
       const res = await adapter.handle(new Request('https://example.com/n'));
@@ -424,7 +418,7 @@ function registerVersioningAndDeferred(): void {
         }, 0);
       };
       // Two version chains so the multi-handler dispatch branch is exercised.
-      adapter.get('/v', adapter.applyVersionFilter(v1, '1', options) as never);
+      adapter.get('/v', adapter.applyVersionFilter(v1, '1', options));
       adapter.get(
         '/v',
         adapter.applyVersionFilter(
@@ -432,7 +426,7 @@ function registerVersioningAndDeferred(): void {
             adapter.reply(res, { version: 'v2' }),
           '2',
           options,
-        ) as never,
+        ),
       );
 
       const res = await Promise.race([
@@ -675,7 +669,7 @@ function registerMutableFieldsAndErrors(): void {
       let threw = false;
       adapter.get('/fc', (req: Req, res: Res) => {
         try {
-          (req.cookies as Record<string, string>).sid = 'x';
+          req.cookies.sid = 'x';
           (req.files as Record<string, unknown>).f = new File([''], 'a.txt');
         } catch {
           threw = true;
@@ -832,13 +826,15 @@ function registerMultipartAndFilters(): void {
       // later tick. handle() must await res.settled so the intended body is
       // produced before the Response is built.
       adapter.setErrorHandler(
-        async (failure: Error, _req, res: CloudflareResponse) => {
-          await Promise.resolve();
-          res.statusCode = 500;
-          res.setHeader('content-type', 'application/json; charset=utf-8');
-          res.body = JSON.stringify({ filtered: failure.message });
-          res.sent = true;
-          (res as CloudflareResponse & { settle: () => void }).settle();
+        (failure: Error, _req, res: CloudflareResponse) => {
+          void (async () => {
+            await Promise.resolve();
+            res.statusCode = 500;
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.body = JSON.stringify({ filtered: failure.message });
+            res.sent = true;
+            (res as CloudflareResponse & { settle: () => void }).settle();
+          })();
         },
       );
       adapter.get('/boom', () => {
@@ -864,11 +860,7 @@ function registerMultipartAndFilters(): void {
       // as a wildcard when the request supplies NO version.
       adapter.get(
         '/mixed',
-        adapter.applyVersionFilter(
-          handler,
-          ['1', VERSION_NEUTRAL],
-          options,
-        ) as never,
+        adapter.applyVersionFilter(handler, ['1', VERSION_NEUTRAL], options),
       );
       return adapter;
     }
@@ -968,7 +960,7 @@ function registerMiddlewareScoping(): void {
   describe('Nest wildcard-scoped middleware (createMiddlewareFactory)', () => {
     function register(adapter: CloudflareAdapter, path: string): boolean[] {
       const ran: boolean[] = [];
-      const factory = adapter.createMiddlewareFactory(0 as never);
+      const factory = adapter.createMiddlewareFactory(RequestMethod.GET);
       factory(
         path,
         (
@@ -1006,7 +998,7 @@ function registerMiddlewareScoping(): void {
     it("treats Nest's whole-app '/{*path}' form as always-run", async () => {
       const adapter = new CloudflareAdapter();
       const ran: boolean[] = [];
-      const factory = adapter.createMiddlewareFactory(0 as never);
+      const factory = adapter.createMiddlewareFactory(RequestMethod.GET);
       factory(
         '/{*path}',
         (
