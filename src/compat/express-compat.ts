@@ -291,10 +291,10 @@ export interface ExpressCompatResponse {
 
   /**
    * Run the content-negotiation branch matching the request's `Accept` header.
-   * @param obj - Map of types to handlers, with an optional `default`.
+   * @param object - Map of types to handlers, with an optional `default`.
    * @returns This response, for chaining.
    */
-  format(obj: Record<string, () => void>): this;
+  format(object: Record<string, () => void>): this;
 
   /** Index signature for arbitrary properties Express middleware may attach. */
   [key: string]: unknown;
@@ -395,7 +395,7 @@ function headersToObject(
   headers: Headers,
 ): Record<string, string | string[] | undefined> {
   const result: Record<string, string | string[] | undefined> = {};
-  headers.forEach((value, key) => {
+  for (const [key, value] of headers.entries()) {
     const existing = result[key.toLowerCase()];
     if (existing) {
       if (Array.isArray(existing)) {
@@ -406,7 +406,7 @@ function headersToObject(
     } else {
       result[key.toLowerCase()] = value;
     }
-  });
+  }
   return result;
 }
 
@@ -430,12 +430,12 @@ function parseAccept(
     .map((part) => {
       const [type, ...params] = part.trim().split(';');
       let quality = 1;
-      params.forEach((param) => {
-        const [key, value] = param.trim().split('=');
+      for (const parameter of params) {
+        const [key, value] = parameter.trim().split('=');
         if (key === 'q') {
           quality = Number.parseFloat(value) || 1;
         }
-      });
+      }
       return { type: type.trim(), quality };
     })
     .toSorted((a, b) => b.quality - a.quality);
@@ -506,18 +506,18 @@ function serializeCookie(
 export function createExpressRequest(
   cfReq: CloudflareRequest,
 ): ExpressCompatRequest {
-  const headersObj = headersToObject(cfReq.headers);
+  const headersObject = headersToObject(cfReq.headers);
 
   const cookieHeader = cfReq.headers.get('cookie') || '';
   const cookies: Record<string, string> = { ...cfReq.cookies };
-  cookieHeader.split(';').forEach((cookie) => {
+  for (const cookie of cookieHeader.split(';')) {
     const [name, ...valueParts] = cookie.trim().split('=');
     if (name) {
       cookies[decodeURIComponent(name.trim())] = decodeURIComponent(
         valueParts.join('='),
       );
     }
-  });
+  }
 
   const req: ExpressCompatRequest = {
     method: cfReq.method,
@@ -529,7 +529,7 @@ export function createExpressRequest(
     ip: cfReq.ip,
     protocol: cfReq.protocol || 'https',
     secure: cfReq.secure ?? true,
-    headers: headersObj,
+    headers: headersObject,
 
     // Shallow-copy so middleware can safely mutate these (query sanitizers,
     // param injectors, etc.) without hitting the adapter's frozen empty
@@ -549,7 +549,7 @@ export function createExpressRequest(
 
     get(name: string): string | undefined {
       const key = name.toLowerCase();
-      const value = headersObj[key];
+      const value = headersObject[key];
       return Array.isArray(value) ? value[0] : value;
     },
 
@@ -615,11 +615,30 @@ export function createExpressRequest(
 }
 
 /**
+ * Set a header to one value or to an array of values, replacing any prior value.
+ * Node's setHeader has REPLACE semantics: an array discards the previous list.
+ * @param cfRes - The adapter response to write to.
+ * @param name - The header name.
+ * @param value - A single value, or the list to append after removing the header.
+ */
+function setHeaderValue(
+  cfRes: CloudflareResponse,
+  name: string,
+  value: string | string[],
+): void {
+  if (Array.isArray(value)) {
+    cfRes.removeHeader(name);
+    for (const item of value) cfRes.headers.append(name, item);
+  } else {
+    cfRes.setHeader(name, value);
+  }
+}
+
+/**
  * Build an Express-compatible response wrapper over a {@link CloudflareResponse}.
  * @param cfRes - The adapter response to wrap.
  * @returns An Express-shaped response that writes through to `cfRes`.
  */
-// eslint-disable-next-line sonarjs/max-lines-per-function -- logic rewrite would be large: keep this settle-once Promise wrapper
 export function createExpressResponse(
   cfRes: CloudflareResponse,
 ): ExpressCompatResponse {
@@ -660,23 +679,13 @@ export function createExpressResponse(
       value?: string | string[],
     ) {
       if (typeof field === 'object') {
-        Object.entries(field).forEach(([key, val]) => {
-          if (Array.isArray(val)) {
-            // Replace semantics: discard any prior value, then append each item.
-            cfRes.removeHeader(key);
-            val.forEach((v) => cfRes.headers.append(key, v));
-          } else {
-            cfRes.setHeader(key, val);
-          }
-        });
+        for (const [key, headerValue] of Object.entries(field)) {
+          setHeaderValue(cfRes, key, headerValue);
+        }
       } else if (value === undefined) {
         // No value to set and no header map given: nothing to do.
-      } else if (Array.isArray(value)) {
-        // Replace semantics: discard any prior value, then append each item.
-        cfRes.removeHeader(field);
-        value.forEach((v) => cfRes.headers.append(field, v));
       } else {
-        cfRes.setHeader(field, value);
+        setHeaderValue(cfRes, field, value);
       }
       return res;
     },
@@ -710,7 +719,7 @@ export function createExpressResponse(
         // Node's setHeader has REPLACE semantics: a second setHeader() with an
         // array must discard the previous list, not append onto it.
         cfRes.removeHeader(field);
-        value.forEach((v) => cfRes.headers.append(field, v));
+        for (const v of value) cfRes.headers.append(field, v);
       } else {
         cfRes.setHeader(field, String(value));
       }
@@ -733,7 +742,7 @@ export function createExpressResponse(
 
     append(field: string, value: string | string[]) {
       if (Array.isArray(value)) {
-        value.forEach((v) => cfRes.headers.append(field, v));
+        for (const v of value) cfRes.headers.append(field, v);
       } else {
         cfRes.headers.append(field, value);
       }
@@ -811,8 +820,8 @@ export function createExpressResponse(
     },
 
     cookie(name: string, value: string, options: CookieOptions = {}) {
-      const cookieStr = serializeCookie(name, value, options);
-      cfRes.headers.append('Set-Cookie', cookieStr);
+      const cookieString = serializeCookie(name, value, options);
+      cfRes.headers.append('Set-Cookie', cookieString);
       return res;
     },
 
@@ -828,7 +837,7 @@ export function createExpressResponse(
 
     links(links: Record<string, string>) {
       const linkHeader = Object.entries(links)
-        .map(([rel, href]) => `<${href}>; rel="${rel}"`)
+        .map(([relationship, href]) => `<${href}>; rel="${relationship}"`)
         .join(', ');
       cfRes.setHeader('Link', linkHeader);
       return res;
@@ -844,15 +853,15 @@ export function createExpressResponse(
       return res;
     },
 
-    format(obj: Record<string, () => void>) {
+    format(object: Record<string, () => void>) {
       const accept = cfRes.headers.get?.('Accept') || '*/*';
-      const types = Object.keys(obj);
+      const types = Object.keys(object);
       const matched = parseAccept(accept, types);
 
-      if (matched && obj[matched]) {
-        obj[matched]();
-      } else if (obj.default) {
-        obj.default();
+      if (matched && object[matched]) {
+        object[matched]();
+      } else if (object.default) {
+        object.default();
       } else {
         // No handler matched the Accept header and there is no default.
       }

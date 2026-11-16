@@ -529,7 +529,7 @@ function registerWildcardAndOrigin(): void {
   describe('CORS origin handling', () => {
     it('restricts a RegExp origin and does not reflect a non-matching one', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.enableCors({ origin: /\.example\.com$/ });
+      adapter.enableCors({ origin: EXAMPLE_COM_SUBDOMAIN });
       adapter.get('/r', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
@@ -557,7 +557,7 @@ function registerWildcardAndOrigin(): void {
 
     it('matches a RegExp entry inside an origin array', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.enableCors({ origin: ['https://a.test', /\.example\.com$/] });
+      adapter.enableCors({ origin: ['https://a.test', EXAMPLE_COM_SUBDOMAIN] });
       adapter.get('/ra', (_req: Req, res: Res) =>
         adapter.reply(res, { ok: true }),
       );
@@ -1067,6 +1067,9 @@ function registerMiddlewareScoping(): void {
     expect(await res.json()).toEqual({ custom: true });
   });
 }
+
+/** Matches any origin ending in `.example.com`. */
+const EXAMPLE_COM_SUBDOMAIN = /\.example\.com$/;
 
 describe('CloudflareAdapter', () => {
   registerBasicRouting();

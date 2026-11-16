@@ -444,7 +444,7 @@ function headersToObject(
   headers: Headers,
 ): Record<string, string | string[] | undefined> {
   const result: Record<string, string | string[] | undefined> = {};
-  headers.forEach((value, key) => {
+  for (const [key, value] of headers.entries()) {
     const lowerKey = key.toLowerCase();
     const existing = result[lowerKey];
     if (existing) {
@@ -456,7 +456,7 @@ function headersToObject(
     } else {
       result[lowerKey] = value;
     }
-  });
+  }
   return result;
 }
 
@@ -468,7 +468,7 @@ function headersToObject(
 export function createFastifyRequest(
   cfReq: CloudflareRequest,
 ): FastifyCompatRequest {
-  const headersObj = headersToObject(cfReq.headers);
+  const headersObject = headersToObject(cfReq.headers);
 
   const req: FastifyCompatRequest = {
     id: generateRequestId(),
@@ -477,7 +477,7 @@ export function createFastifyRequest(
     params: { ...cfReq.params },
     query: { ...cfReq.query },
     body: cfReq.body,
-    headers: headersObj,
+    headers: headersObject,
     raw: cfReq.raw,
     url: cfReq.originalUrl || cfReq.path || '/',
     originalUrl: cfReq.originalUrl || cfReq.path || '/',
@@ -531,9 +531,9 @@ export function createFastifyReply(
     },
 
     headers(headers: Record<string, string | number | boolean>) {
-      Object.entries(headers).forEach(([key, value]) => {
+      for (const [key, value] of Object.entries(headers)) {
         cfRes.setHeader(key, String(value));
-      });
+      }
       return reply;
     },
 
@@ -549,9 +549,9 @@ export function createFastifyReply(
 
     getHeaders() {
       const result: Record<string, OptionalHeaderValue> = {};
-      cfRes.headers.forEach((value, key) => {
+      for (const [key, value] of cfRes.headers.entries()) {
         result[key] = value;
-      });
+      }
       const cookies = cfRes.getSetCookie();
       if (cookies.length > 0) {
         result['set-cookie'] = cookies;
