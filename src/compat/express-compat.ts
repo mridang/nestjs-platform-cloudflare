@@ -701,13 +701,12 @@ export function createExpressResponse(
       return res.set(field, value);
     },
 
+    // eslint-disable-next-line sonarjs/function-return-type -- mirrors Express's res.get, which returns string, string[] or undefined
     get(field: string) {
       if (field.toLowerCase() === 'set-cookie') {
         // Express returns Set-Cookie as string[]; never comma-join it.
         const cookies = cfRes.getSetCookie();
-        return cookies.length > 0
-          ? (cookies as unknown as string)
-          : (undefined as unknown as string);
+        return cookies.length > 0 ? cookies : undefined;
       }
       return cfRes.getHeader(field) || undefined;
     },
@@ -762,11 +761,11 @@ export function createExpressResponse(
           cfRes.setHeader('Content-Type', 'application/octet-stream');
         }
 
-        cfRes.send(body as unknown as BodyInit);
+        cfRes.send(body);
       } else if (typeof body === 'object') {
         return res.json(body);
       } else {
-        cfRes.send(String(body));
+        cfRes.send((body as number | boolean).toString());
       }
       return res;
     },
@@ -997,7 +996,7 @@ export function wrapExpressMiddleware(
 
   return Object.assign(wrapped, {
     isExpressErrorMiddleware: isErrorMiddleware,
-  }) as WrappedExpressMiddleware;
+  });
 }
 
 /**

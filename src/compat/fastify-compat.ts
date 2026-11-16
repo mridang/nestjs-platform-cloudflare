@@ -263,7 +263,7 @@ export type FastifyPluginAsync<Options = Record<string, unknown>> = (
 export type FastifyRouteHandler = (
   request: FastifyCompatRequest,
   reply: FastifyCompatReply,
-) => unknown | Promise<unknown>;
+) => unknown;
 
 /**
  * Options describing a single Fastify route registration.
@@ -591,7 +591,7 @@ export function createFastifyReply(
         }
         cfRes.send(serializer(payload));
       } else {
-        cfRes.send(String(payload));
+        cfRes.send((payload as number | boolean).toString());
       }
       return reply;
     },
@@ -683,7 +683,7 @@ export function wrapFastifyHook(
         };
 
         try {
-          (hook as FastifyHookCallback)(fastifyReq, fastifyReply, done);
+          hook(fastifyReq, fastifyReply, done);
         } catch (error) {
           reject(error);
         }
@@ -705,7 +705,7 @@ export function wrapFastifyHook(
  * @param opts - Options passed to the plugin.
  * @returns A promise that resolves once the plugin finishes.
  */
-export function wrapFastifyPlugin<Options = Record<string, unknown>>(
+export async function wrapFastifyPlugin<Options = Record<string, unknown>>(
   plugin: FastifyPlugin<Options> | FastifyPluginAsync<Options>,
   instance: FastifyLikeInstance,
   opts: Options = {} as Options,
@@ -760,21 +760,22 @@ export function createFastifyLogger(): FastifyLogger {
     fatal: createLogFn('fatal'),
     child(bindings: Record<string, unknown>) {
       const prefix = Object.entries(bindings)
-        .map(([k, v]) => `${k}=${v}`)
+        .map(([k, v]) => `${k}=${String(v)}`)
         .join(' ');
       const childLog = createFastifyLogger();
       const wrap =
-        (fn: (msg: string, ...args: unknown[]) => void) =>
-        (msg: string, ...args: unknown[]) =>
-          fn(`[${prefix}] ${msg}`, ...args);
+        (level: Exclude<keyof FastifyLogger, 'child'>) =>
+        (msg: string, ...args: unknown[]) => {
+          childLog[level](`[${prefix}] ${msg}`, ...args);
+        };
       return {
         ...childLog,
-        info: wrap(childLog.info),
-        error: wrap(childLog.error),
-        debug: wrap(childLog.debug),
-        warn: wrap(childLog.warn),
-        trace: wrap(childLog.trace),
-        fatal: wrap(childLog.fatal),
+        info: wrap('info'),
+        error: wrap('error'),
+        debug: wrap('debug'),
+        warn: wrap('warn'),
+        trace: wrap('trace'),
+        fatal: wrap('fatal'),
       };
     },
   };
