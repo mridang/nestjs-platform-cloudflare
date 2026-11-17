@@ -350,6 +350,7 @@ export type ExpressErrorMiddleware = (
 ) => void | Promise<void>;
 
 /** Standard HTTP reason phrases keyed by status code. */
+// eslint-disable-next-line tslop/no-known-value-widening -- looked up by an arbitrary status code or extension, so it stays an open dictionary
 const STATUS_MESSAGES: Record<number, string> = {
   100: 'Continue',
   101: 'Switching Protocols',
@@ -395,18 +396,23 @@ function headersToObject(
   headers: Headers,
 ): Record<string, string | string[] | undefined> {
   const result: Record<string, string | string[] | undefined> = {};
+  // eslint-disable-next-line functional/no-loop-statements -- folds repeated headers into arrays as it goes
   for (const [key, value] of headers.entries()) {
     const existing = result[key.toLowerCase()];
     if (existing) {
       if (Array.isArray(existing)) {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         existing.push(value);
       } else {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         result[key.toLowerCase()] = [existing, value];
       }
     } else {
+      // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
       result[key.toLowerCase()] = value;
     }
   }
+  // eslint-disable-next-line tslop/no-known-value-widening -- returned as an open header record because header names are arbitrary
   return result;
 }
 
@@ -429,7 +435,9 @@ function parseAccept(
     .split(',')
     .map((part) => {
       const [type, ...params] = part.trim().split(';');
+      // eslint-disable-next-line functional/no-let -- running quality value read from the Accept parameters
       let quality = 1;
+      // eslint-disable-next-line functional/no-loop-statements -- scans the Accept parameters for the quality value
       for (const parameter of params) {
         const [key, value] = parameter.trim().split('=');
         if (key === 'q') {
@@ -440,7 +448,9 @@ function parseAccept(
     })
     .toSorted((a, b) => b.quality - a.quality);
 
+  // eslint-disable-next-line functional/no-loop-statements -- walks the offered types in preference order and returns on the first match
   for (const accept of accepts) {
+    // eslint-disable-next-line functional/no-loop-statements -- walks the offered types in preference order and returns on the first match
     for (const type of types) {
       if (
         accept.type === '*/*' ||
@@ -468,34 +478,21 @@ function serializeCookie(
   value: string,
   options: CookieOptions = {},
 ): string {
-  let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-
-  if (options.maxAge !== undefined) {
-    cookie += `; Max-Age=${options.maxAge}`;
-  }
-  if (options.domain) {
-    cookie += `; Domain=${options.domain}`;
-  }
-  cookie += options.path ? `; Path=${options.path}` : '; Path=/';
-  if (options.expires) {
-    cookie += `; Expires=${options.expires.toUTCString()}`;
-  }
-  if (options.httpOnly) {
-    cookie += '; HttpOnly';
-  }
-  if (options.secure) {
-    cookie += '; Secure';
-  }
-  if (options.sameSite) {
-    cookie +=
-      options.sameSite === true
-        ? '; SameSite=Strict'
-        : `; SameSite=${
-            options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
-          }`;
-  }
-
-  return cookie;
+  const sameSite =
+    options.sameSite === true
+      ? 'Strict'
+      : options.sameSite &&
+        options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1);
+  return [
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`,
+    options.maxAge === undefined ? '' : `; Max-Age=${options.maxAge}`,
+    options.domain ? `; Domain=${options.domain}` : '',
+    options.path ? `; Path=${options.path}` : '; Path=/',
+    options.expires ? `; Expires=${options.expires.toUTCString()}` : '',
+    options.httpOnly ? '; HttpOnly' : '',
+    options.secure ? '; Secure' : '',
+    sameSite ? `; SameSite=${sameSite}` : '',
+  ].join('');
 }
 
 /**
@@ -509,10 +506,13 @@ export function createExpressRequest(
   const headersObject = headersToObject(cfReq.headers);
 
   const cookieHeader = cfReq.headers.get('cookie') || '';
+  // eslint-disable-next-line tslop/no-known-value-widening -- open record keyed by arbitrary cookie names
   const cookies: Record<string, string> = { ...cfReq.cookies };
+  // eslint-disable-next-line functional/no-loop-statements -- parses each cookie pair in turn
   for (const cookie of cookieHeader.split(';')) {
     const [name, ...valueParts] = cookie.trim().split('=');
     if (name) {
+      // eslint-disable-next-line functional/immutable-data -- builds the cookie record from the Cookie header
       cookies[decodeURIComponent(name.trim())] = decodeURIComponent(
         valueParts.join('='),
       );
@@ -565,6 +565,7 @@ export function createExpressRequest(
       }
 
       const types = Array.isArray(type) ? type : [type];
+      // eslint-disable-next-line functional/no-loop-statements -- walks the offered types in preference order and returns on the first match
       for (const candidate of types) {
         if (
           contentType.includes(candidate) ||
@@ -628,7 +629,10 @@ function setHeaderValue(
 ): void {
   if (Array.isArray(value)) {
     cfRes.removeHeader(name);
-    for (const item of value) cfRes.headers.append(name, item);
+    // eslint-disable-next-line functional/no-loop-statements -- appends each array item as its own header value
+    for (const item of value) {
+      cfRes.headers.append(name, item);
+    }
   } else {
     cfRes.setHeader(name, value);
   }
@@ -642,6 +646,7 @@ function setHeaderValue(
 export function createExpressResponse(
   cfRes: CloudflareResponse,
 ): ExpressCompatResponse {
+  // eslint-disable-next-line functional/no-let -- status text chosen from the table or the argument
   let statusMessage = 'OK';
 
   const res: ExpressCompatResponse = {
@@ -649,6 +654,7 @@ export function createExpressResponse(
       return cfRes.statusCode;
     },
     set statusCode(code: number) {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       cfRes.statusCode = code;
       statusMessage = STATUS_MESSAGES[code] || 'Unknown';
     },
@@ -679,6 +685,7 @@ export function createExpressResponse(
       value?: string | string[],
     ) {
       if (typeof field === 'object') {
+        // eslint-disable-next-line functional/no-loop-statements -- sets each header of the object in turn
         for (const [key, headerValue] of Object.entries(field)) {
           setHeaderValue(cfRes, key, headerValue);
         }
@@ -718,7 +725,10 @@ export function createExpressResponse(
         // Node's setHeader has REPLACE semantics: a second setHeader() with an
         // array must discard the previous list, not append onto it.
         cfRes.removeHeader(field);
-        for (const v of value) cfRes.headers.append(field, v);
+        // eslint-disable-next-line functional/no-loop-statements -- appends each array item as its own header value
+        for (const v of value) {
+          cfRes.headers.append(field, v);
+        }
       } else {
         cfRes.setHeader(field, String(value));
       }
@@ -741,7 +751,10 @@ export function createExpressResponse(
 
     append(field: string, value: string | string[]) {
       if (Array.isArray(value)) {
-        for (const v of value) cfRes.headers.append(field, v);
+        // eslint-disable-next-line functional/no-loop-statements -- appends each array item as its own header value
+        for (const v of value) {
+          cfRes.headers.append(field, v);
+        }
       } else {
         cfRes.headers.append(field, value);
       }
@@ -801,6 +814,7 @@ export function createExpressResponse(
     },
 
     type(type: string) {
+      // eslint-disable-next-line tslop/no-known-value-widening -- looked up by an arbitrary status code or extension, so it stays an open dictionary
       const mimeTypes: Record<string, string> = {
         html: 'text/html',
         json: 'application/json',
@@ -994,6 +1008,7 @@ export function wrapExpressMiddleware(
     });
   };
 
+  // eslint-disable-next-line functional/immutable-data -- attaches the Express helper methods onto the wrapped middleware function
   return Object.assign(wrapped, {
     isExpressErrorMiddleware: isErrorMiddleware,
   });

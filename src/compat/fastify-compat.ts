@@ -263,6 +263,7 @@ export type FastifyPluginAsync<Options = Record<string, unknown>> = (
 export type FastifyRouteHandler = (
   request: FastifyCompatRequest,
   reply: FastifyCompatReply,
+  // eslint-disable-next-line tslop/no-unknown-returns -- handlers and hooks return whatever the application returns, and the adapter ignores it
 ) => unknown;
 
 /**
@@ -423,6 +424,7 @@ export interface FastifyLogger {
 }
 
 /** Monotonic counter backing {@link generateRequestId}. */
+// eslint-disable-next-line functional/no-let -- module-level counter that numbers request ids
 let requestIdCounter = 0;
 
 /**
@@ -444,19 +446,24 @@ function headersToObject(
   headers: Headers,
 ): Record<string, string | string[] | undefined> {
   const result: Record<string, string | string[] | undefined> = {};
+  // eslint-disable-next-line functional/no-loop-statements -- folds repeated headers into arrays as it goes
   for (const [key, value] of headers.entries()) {
     const lowerKey = key.toLowerCase();
     const existing = result[lowerKey];
     if (existing) {
       if (Array.isArray(existing)) {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         existing.push(value);
       } else {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         result[lowerKey] = [existing, value];
       }
     } else {
+      // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
       result[lowerKey] = value;
     }
   }
+  // eslint-disable-next-line tslop/no-known-value-widening -- returned as an open header record because header names are arbitrary
   return result;
 }
 
@@ -500,6 +507,7 @@ export function createFastifyRequest(
 export function createFastifyReply(
   cfRes: CloudflareResponse,
 ): FastifyCompatReply {
+  // eslint-disable-next-line functional/no-let -- replaced when the app installs a custom serializer
   let serializer: (payload: unknown) => string = JSON.stringify;
   const startTime = Date.now();
 
@@ -508,6 +516,7 @@ export function createFastifyReply(
       return cfRes.statusCode;
     },
     set statusCode(code: number) {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       cfRes.statusCode = code;
     },
     get sent() {
@@ -531,6 +540,7 @@ export function createFastifyReply(
     },
 
     headers(headers: Record<string, string | number | boolean>) {
+      // eslint-disable-next-line functional/no-loop-statements -- sets each header of the object in turn
       for (const [key, value] of Object.entries(headers)) {
         cfRes.setHeader(key, String(value));
       }
@@ -549,11 +559,14 @@ export function createFastifyReply(
 
     getHeaders() {
       const result: Record<string, OptionalHeaderValue> = {};
+      // eslint-disable-next-line functional/no-loop-statements -- folds the headers into a record while collecting set-cookie separately
       for (const [key, value] of cfRes.headers.entries()) {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         result[key] = value;
       }
       const cookies = cfRes.getSetCookie();
       if (cookies.length > 0) {
+        // eslint-disable-next-line functional/immutable-data -- builds the header record from entries that may repeat
         result['set-cookie'] = cookies;
       }
       return result;
@@ -668,6 +681,7 @@ export function wrapFastifyHook(
     const fastifyReq = createFastifyRequest(cfReq);
     const fastifyReply = createFastifyReply(cfRes);
 
+    // eslint-disable-next-line functional/no-let -- set by the hook callback or by its return value
     let shouldContinue: boolean;
     if (isAsyncHook(hook)) {
       await hook(fastifyReq, fastifyReply);

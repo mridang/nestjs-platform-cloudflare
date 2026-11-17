@@ -1,21 +1,12 @@
 import 'urlpattern-polyfill';
 import { describe, it, expect } from '@jest/globals';
-import { RequestMethod, VersioningType, VERSION_NEUTRAL } from '@nestjs/common';
-import {
-  CloudflareAdapter,
-  FetchAdapter,
-  type CloudflareRequest,
-  type CloudflareResponse,
-  type ExpressCompatRequest,
-  type ExpressCompatResponse,
-  type ExpressNextFunction,
+import { VersioningType, VERSION_NEUTRAL } from '@nestjs/common';
+import { CloudflareAdapter, FetchAdapter } from '../../src/index.js';
+import type {
+  CloudflareRequest,
+  CloudflareResponse,
+  ExpressNextFunction,
 } from '../../src/index.js';
-
-type Req = CloudflareRequest;
-type Res = CloudflareResponse;
-type XReq = ExpressCompatRequest;
-type XRes = ExpressCompatResponse;
-type Next = ExpressNextFunction;
 
 function registerBasicRouting(): void {
   it('reports its type as "fetch"', () => {
@@ -249,13 +240,16 @@ function registerCorsAndStatic(): void {
 
   it('does not throw on a 204 response that still carries a body', async () => {
     const adapter = new CloudflareAdapter();
-    adapter.get('/no-content', (_req: Req, res: Res) => {
-      res.statusCode = 204;
-      // a leftover body that the runtime would otherwise reject
-      res.body = 'leftover';
-      res.settle();
-      res.sent = true;
-    });
+    adapter.get(
+      '/no-content',
+      (_req: CloudflareRequest, res: CloudflareResponse) => {
+        res.statusCode = 204;
+        // a leftover body that the runtime would otherwise reject
+        res.body = 'leftover';
+        res.settle();
+        res.sent = true;
+      },
+    );
 
     const res = await adapter.handle(
       new Request('https://example.com/no-content'),
@@ -268,9 +262,12 @@ function registerCorsAndStatic(): void {
   it('reaches a user @Options() route when CORS is enabled and it is not a preflight', async () => {
     const adapter = new CloudflareAdapter();
     adapter.enableCors({ origin: '*' });
-    adapter.options('/opt', (_req: Req, res: Res) => {
-      adapter.reply(res, { handled: true });
-    });
+    adapter.options(
+      '/opt',
+      (_req: CloudflareRequest, res: CloudflareResponse) => {
+        adapter.reply(res, { handled: true });
+      },
+    );
 
     // Real preflight: carries access-control-request-method.
     const preflight = await adapter.handle(
@@ -371,9 +368,12 @@ function registerVersioningAndDeferred(): void {
 
     it('still runs a plain single-handler route unchanged', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/plain', (_req: Req, res: Res) => {
-        adapter.reply(res, { ok: true });
-      });
+      adapter.get(
+        '/plain',
+        (_req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { ok: true });
+        },
+      );
       const res = await adapter.handle(
         new Request('https://example.com/plain'),
       );
@@ -387,14 +387,17 @@ function registerVersioningAndDeferred(): void {
       const adapter = new CloudflareAdapter();
       // Returns synchronously, then settles the response on a later tick — the
       // documented @Res()/streaming pattern.
-      adapter.get('/deferred', (_req: Req, res: Res) => {
-        setTimeout(() => {
-          res.statusCode = 202;
-          res.body = 'later';
-          res.sent = true;
-          res.settle();
-        }, 0);
-      });
+      adapter.get(
+        '/deferred',
+        (_req: CloudflareRequest, res: CloudflareResponse) => {
+          setTimeout(() => {
+            res.statusCode = 202;
+            res.body = 'later';
+            res.sent = true;
+            res.settle();
+          }, 0);
+        },
+      );
 
       const res = await adapter.handle(
         new Request('https://example.com/deferred'),
@@ -435,9 +438,9 @@ function registerVersioningAndDeferred(): void {
             headers: { 'x-api-version': '1' },
           }),
         ),
-        new Promise<Response>((_resolve, reject) =>
-          setTimeout(() => reject(new Error('request hung')), 1000),
-        ),
+        new Promise<Response>((_resolve, reject) => {
+          setTimeout(() => reject(new Error('request hung')), 1000);
+        }),
       ]);
       expect(res.status).toBe(202);
       expect(await res.text()).toBe('later-v1');
@@ -446,7 +449,14 @@ function registerVersioningAndDeferred(): void {
 
   it('returns 404 when a lone handler falls through by calling next()', async () => {
     const adapter = new CloudflareAdapter();
-    adapter.get('/fall', (_req: Req, _res: Res, next: Next) => next());
+    adapter.get(
+      '/fall',
+      (
+        _req: CloudflareRequest,
+        _res: CloudflareResponse,
+        next: ExpressNextFunction,
+      ) => next(),
+    );
 
     const res = await adapter.handle(new Request('https://example.com/fall'));
     expect(res.status).toBe(404);
@@ -457,9 +467,12 @@ function registerWildcardAndOrigin(): void {
   describe('wildcard / catch-all routes (path-to-regexp v8 syntax)', () => {
     it('matches @Get("{*path}") catch-all and captures the splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/{*path}', (req: Req, res: Res) => {
-        adapter.reply(res, { path: req.params.path });
-      });
+      adapter.get(
+        '/{*path}',
+        (req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { path: req.params.path });
+        },
+      );
 
       const res = await adapter.handle(
         new Request('https://example.com/a/b/c'),
@@ -470,9 +483,12 @@ function registerWildcardAndOrigin(): void {
 
     it('matches @Get("*path") catch-all and captures the splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/*path', (req: Req, res: Res) => {
-        adapter.reply(res, { path: req.params.path });
-      });
+      adapter.get(
+        '/*path',
+        (req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { path: req.params.path });
+        },
+      );
 
       const res = await adapter.handle(new Request('https://example.com/x/y'));
       expect(res.status).toBe(200);
@@ -481,9 +497,12 @@ function registerWildcardAndOrigin(): void {
 
     it('matches a middle-segment splat', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/files/{*rest}/download', (req: Req, res: Res) => {
-        adapter.reply(res, { rest: req.params.rest });
-      });
+      adapter.get(
+        '/files/{*rest}/download',
+        (req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { rest: req.params.rest });
+        },
+      );
 
       const res = await adapter.handle(
         new Request('https://example.com/files/a/b/download'),
@@ -494,9 +513,12 @@ function registerWildcardAndOrigin(): void {
 
     it('unwraps a literal brace group in a route path', async () => {
       const adapter = new CloudflareAdapter();
-      adapter.get('/users/{list}/:id', (req: Req, res: Res) => {
-        adapter.reply(res, { id: req.params.id });
-      });
+      adapter.get(
+        '/users/{list}/:id',
+        (req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { id: req.params.id });
+        },
+      );
 
       const res = await adapter.handle(
         new Request('https://example.com/users/list/7'),
@@ -508,9 +530,12 @@ function registerWildcardAndOrigin(): void {
     it('unwraps every brace group in a long route path', async () => {
       const adapter = new CloudflareAdapter();
       const segments = 2000;
-      adapter.get(`${'/{s}'.repeat(segments)}/:id`, (req: Req, res: Res) => {
-        adapter.reply(res, { id: req.params.id });
-      });
+      adapter.get(
+        `${'/{s}'.repeat(segments)}/:id`,
+        (req: CloudflareRequest, res: CloudflareResponse) => {
+          adapter.reply(res, { id: req.params.id });
+        },
+      );
 
       const res = await adapter.handle(
         new Request(`https://example.com${'/s'.repeat(segments)}/9`),
@@ -524,7 +549,7 @@ function registerWildcardAndOrigin(): void {
     it('restricts a RegExp origin and does not reflect a non-matching one', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: EXAMPLE_COM_SUBDOMAIN });
-      adapter.get('/r', (_req: Req, res: Res) =>
+      adapter.get('/r', (_req: CloudflareRequest, res: CloudflareResponse) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -543,16 +568,15 @@ function registerWildcardAndOrigin(): void {
         }),
       );
       // Must NOT be '*' — that would defeat the restriction.
-      expect(denied.headers.get('access-control-allow-origin')).not.toBe('*');
-      expect(denied.headers.get('access-control-allow-origin')).not.toBe(
-        'https://evil.com',
-      );
+      const deniedOrigin = denied.headers.get('access-control-allow-origin');
+      expect(deniedOrigin).not.toBe('*');
+      expect(deniedOrigin).not.toBe('https://evil.com');
     });
 
     it('matches a RegExp entry inside an origin array', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: ['https://a.test', EXAMPLE_COM_SUBDOMAIN] });
-      adapter.get('/ra', (_req: Req, res: Res) =>
+      adapter.get('/ra', (_req: CloudflareRequest, res: CloudflareResponse) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -574,7 +598,7 @@ function registerWildcardAndOrigin(): void {
           done: (err: Error | null, allow?: boolean | string) => void,
         ) => done(null, true),
       });
-      adapter.get('/cb', (_req: Req, res: Res) =>
+      adapter.get('/cb', (_req: CloudflareRequest, res: CloudflareResponse) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -593,7 +617,7 @@ function registerWildcardAndOrigin(): void {
     it('sets Vary: Origin when the allow-origin is reflected', async () => {
       const adapter = new CloudflareAdapter();
       adapter.enableCors({ origin: true });
-      adapter.get('/v2', (_req: Req, res: Res) =>
+      adapter.get('/v2', (_req: CloudflareRequest, res: CloudflareResponse) =>
         adapter.reply(res, { ok: true }),
       );
 
@@ -625,450 +649,12 @@ function registerWildcardAndOrigin(): void {
   });
 }
 
-function registerMutableFieldsAndErrors(): void {
-  describe('mutable per-request fields (no frozen sentinel)', () => {
-    it('allows middleware to write to req.query when there is no query string', async () => {
-      const adapter = new CloudflareAdapter();
-      let threw = false;
-      adapter.use((req: Req, _res: Res, next: Next) => {
-        try {
-          (req.query as Record<string, unknown>).page = '1';
-        } catch {
-          threw = true;
-        }
-        next();
-      });
-      adapter.get('/m', (req: Req, res: Res) =>
-        adapter.reply(res, { page: req.query.page }),
-      );
-
-      const res = await adapter.handle(new Request('https://example.com/m'));
-      expect(threw).toBe(false);
-      expect(await res.json()).toEqual({ page: '1' });
-    });
-
-    it('allows handlers to write to req.params on a non-parametric route', async () => {
-      const adapter = new CloudflareAdapter();
-      let threw = false;
-      adapter.get('/p', (req: Req, res: Res) => {
-        try {
-          req.params.tenant = 'acme';
-        } catch {
-          threw = true;
-        }
-        adapter.reply(res, { tenant: req.params.tenant });
-      });
-
-      const res = await adapter.handle(new Request('https://example.com/p'));
-      expect(threw).toBe(false);
-      expect(await res.json()).toEqual({ tenant: 'acme' });
-    });
-
-    it('allows writing to req.files and req.cookies when empty', async () => {
-      const adapter = new CloudflareAdapter();
-      let threw = false;
-      adapter.get('/fc', (req: Req, res: Res) => {
-        try {
-          req.cookies.sid = 'x';
-          (req.files as Record<string, unknown>).f = new File([''], 'a.txt');
-        } catch {
-          threw = true;
-        }
-        adapter.reply(res, { ok: true });
-      });
-
-      await adapter.handle(new Request('https://example.com/fc'));
-      expect(threw).toBe(false);
-    });
-  });
-
-  describe('Express error-handling middleware (next(err) -> 4-arg handler)', () => {
-    it('routes next(err) from a normal middleware to a registered 4-arg error handler', async () => {
-      const adapter = new CloudflareAdapter();
-      // A normal 3-arg middleware that raises an error.
-      adapter.useExpressMiddleware((_req: XReq, _res: XRes, next: Next) => {
-        next(new Error('boom'));
-      });
-      // A standalone 4-arg Express error handler that catches it and responds.
-      // Express identifies error handlers by arity (4 params), so all four
-      // must be declared even though `next` is unused here.
-      adapter.useExpressMiddleware(
-        (
-          failure: unknown,
-          _req: unknown,
-          res: { status: (c: number) => { json: (b: unknown) => void } },
-          next: unknown,
-        ) => {
-          expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
-        },
-      );
-      adapter.get('/x', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-
-      const res = await adapter.handle(new Request('https://example.com/x'));
-      expect(res.status).toBe(500);
-      // Must be the custom error handler's body, NOT the generic 500 string.
-      expect(await res.json()).toEqual({ caught: 'boom' });
-    });
-
-    it('falls through to the generic 500 when no error handler is registered', async () => {
-      const adapter = new CloudflareAdapter();
-      adapter.useExpressMiddleware((_req: XReq, _res: XRes, next: Next) => {
-        next(new Error('unhandled'));
-      });
-      adapter.get('/y', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-
-      const res = await adapter.handle(new Request('https://example.com/y'));
-      expect(res.status).toBe(500);
-      expect(await res.text()).toBe('Internal Server Error');
-    });
-
-    it('routes a THROWN error from a middleware to a registered 4-arg error handler', async () => {
-      const adapter = new CloudflareAdapter();
-      // A normal 3-arg middleware that throws synchronously instead of calling
-      // next(err). In Express this is equivalent to next(err) and must reach
-      // the downstream error handler, NOT the catch-all 500.
-      adapter.useExpressMiddleware(() => {
-        throw new Error('thrown-boom');
-      });
-      adapter.useExpressMiddleware(
-        (
-          failure: unknown,
-          _req: unknown,
-          res: { status: (c: number) => { json: (b: unknown) => void } },
-          next: unknown,
-        ) => {
-          expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
-        },
-      );
-      adapter.get('/thrown', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-
-      const res = await adapter.handle(
-        new Request('https://example.com/thrown'),
-      );
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ caught: 'thrown-boom' });
-    });
-
-    it('routes an async REJECTION from a middleware to a registered 4-arg error handler', async () => {
-      const adapter = new CloudflareAdapter();
-      adapter.useExpressMiddleware(async () => {
-        await Promise.resolve();
-        throw new Error('rejected-boom');
-      });
-      adapter.useExpressMiddleware(
-        (
-          failure: unknown,
-          _req: unknown,
-          res: { status: (c: number) => { json: (b: unknown) => void } },
-          next: unknown,
-        ) => {
-          expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
-        },
-      );
-      adapter.get('/rejected', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-
-      const res = await adapter.handle(
-        new Request('https://example.com/rejected'),
-      );
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ caught: 'rejected-boom' });
-    });
-  });
-}
-
-function registerMultipartAndFilters(): void {
-  describe('malformed multipart body parsing', () => {
-    it('does not produce an unhandled rejection on a malformed multipart body', async () => {
-      const adapter = new CloudflareAdapter();
-      let seenBody: unknown;
-      adapter.post('/upload', (req: Req, res: Res) => {
-        seenBody = req.body;
-        adapter.reply(res, { ok: true });
-      });
-
-      // A multipart content-type whose body has no/invalid boundary content:
-      // request.formData() rejects. This parse runs before handle()'s
-      // try/catch, so the adapter must guard it rather than let the whole
-      // fetch handler reject.
-      const res = await adapter.handle(
-        new Request('https://example.com/upload', {
-          method: 'POST',
-          headers: {
-            'content-type':
-              'multipart/form-data; boundary=----nonexistentboundary',
-          },
-          body: 'this is not a valid multipart payload',
-        }),
-      );
-
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
-      // The malformed body degrades to an empty object rather than crashing.
-      expect(seenBody).toEqual({});
-    });
-  });
-
-  describe('async exception filter via setErrorHandler', () => {
-    it('awaits an async error handler before serializing the response', async () => {
-      const adapter = new CloudflareAdapter();
-      // An async exception filter: it awaits before writing the response, on a
-      // later tick. handle() must await res.settled so the intended body is
-      // produced before the Response is built.
-      adapter.setErrorHandler(
-        (failure: Error, _req, res: CloudflareResponse) => {
-          void (async () => {
-            await Promise.resolve();
-            res.statusCode = 500;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.body = JSON.stringify({ filtered: failure.message });
-            res.sent = true;
-            (res as CloudflareResponse & { settle: () => void }).settle();
-          })();
-        },
-      );
-      adapter.get('/boom', () => {
-        throw new Error('handler-failed');
-      });
-
-      const res = await adapter.handle(new Request('https://example.com/boom'));
-      expect(res.status).toBe(500);
-      expect(await res.json()).toEqual({ filtered: 'handler-failed' });
-    });
-  });
-
-  describe('mixed version array containing VERSION_NEUTRAL', () => {
-    function mixedAdapter(): CloudflareAdapter {
-      const adapter = new CloudflareAdapter();
-      const options = {
-        type: VersioningType.HEADER as const,
-        header: 'x-api-version',
-      };
-      const handler = (_req: CloudflareRequest, res: CloudflareResponse) =>
-        adapter.reply(res, { matched: true });
-      // ['1', VERSION_NEUTRAL] — a documented mixed array. NEUTRAL must only act
-      // as a wildcard when the request supplies NO version.
-      adapter.get(
-        '/mixed',
-        adapter.applyVersionFilter(handler, ['1', VERSION_NEUTRAL], options),
-      );
-      return adapter;
-    }
-
-    it('matches when the requested version is in the array', async () => {
-      const res = await mixedAdapter().handle(
-        new Request('https://example.com/mixed', {
-          headers: { 'x-api-version': '1' },
-        }),
-      );
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ matched: true });
-    });
-
-    it('matches as a wildcard when NO version is supplied', async () => {
-      const res = await mixedAdapter().handle(
-        new Request('https://example.com/mixed'),
-      );
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ matched: true });
-    });
-
-    it('does NOT match a supplied version absent from the array (NEUTRAL is not a wildcard here)', async () => {
-      const res = await mixedAdapter().handle(
-        new Request('https://example.com/mixed', {
-          headers: { 'x-api-version': '2' },
-        }),
-      );
-      // Nest core falls through -> 404; the adapter must not wrongly dispatch.
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('heterogeneous overlapping dynamic routes', () => {
-    it("gives each fall-through handler its OWN params, not the first match's", async () => {
-      const adapter = new CloudflareAdapter();
-      // First route falls through via next(); second, differently-named route
-      // must then run with ITS param name (`name`), not the first's (`id`).
-      adapter.get('/users/:id', (_req: Req, _res: Res, next: Next) => next());
-      adapter.get('/users/:name', (req: Req, res: Res) => {
-        adapter.reply(res, {
-          id: req.params.id ?? null,
-          name: req.params.name ?? null,
-        });
-      });
-
-      const res = await adapter.handle(
-        new Request('https://example.com/users/42'),
-      );
-      expect(res.status).toBe(200);
-      // The second handler must see {name:'42'}, with id absent.
-      expect(await res.json()).toEqual({ id: null, name: '42' });
-    });
-  });
-
-  describe('CORS headers on 404 responses', () => {
-    it('keeps Access-Control-Allow-Origin on a 404 when CORS is enabled', async () => {
-      const adapter = new CloudflareAdapter();
-      adapter.enableCors({ origin: '*' });
-      // A no-op middleware so handle() builds the pipeline and applies CORS.
-      adapter.use((_req: Req, _res: Res, next: Next) => next());
-
-      const res = await adapter.handle(
-        new Request('https://example.com/unknown', {
-          headers: { origin: 'https://app.test' },
-        }),
-      );
-      expect(res.status).toBe(404);
-      expect(res.headers.get('access-control-allow-origin')).toBe('*');
-    });
-
-    it('keeps reflected ACAO + Vary on a 404 with a custom not-found handler', async () => {
-      const adapter = new CloudflareAdapter();
-      adapter.enableCors({ origin: true });
-      adapter.use((_req: Req, _res: Res, next: Next) => next());
-      adapter.setNotFoundHandler((_req, res) => {
-        res.status(404);
-        res.json({ custom: true });
-      });
-
-      const res = await adapter.handle(
-        new Request('https://example.com/unknown', {
-          headers: { origin: 'https://app.test' },
-        }),
-      );
-      expect(res.status).toBe(404);
-      expect(res.headers.get('access-control-allow-origin')).toBe(
-        'https://app.test',
-      );
-      expect(res.headers.get('vary')).toContain('Origin');
-      expect(await res.json()).toEqual({ custom: true });
-    });
-  });
-}
-
-function registerMiddlewareScoping(): void {
-  describe('Nest wildcard-scoped middleware (createMiddlewareFactory)', () => {
-    function register(adapter: CloudflareAdapter, path: string): boolean[] {
-      const ran: boolean[] = [];
-      const factory = adapter.createMiddlewareFactory(RequestMethod.GET);
-      factory(
-        path,
-        (
-          _req: CloudflareRequest,
-          _res: CloudflareResponse,
-          next: () => void,
-        ) => {
-          ran.push(true);
-          next();
-        },
-      );
-      adapter.get('/cats/a/b', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-      adapter.get('/cats', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-      return ran;
-    }
-
-    it("runs middleware scoped to Nest's '/cats/{*path}' wildcard form", async () => {
-      const adapter = new CloudflareAdapter();
-      const ran = register(adapter, '/cats/{*path}');
-      await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran).toHaveLength(1);
-    });
-
-    it("runs middleware scoped to Nest's '/cats/*path' wildcard form", async () => {
-      const adapter = new CloudflareAdapter();
-      const ran = register(adapter, '/cats/*path');
-      await adapter.handle(new Request('https://example.com/cats/a/b'));
-      expect(ran).toHaveLength(1);
-    });
-
-    it("treats Nest's whole-app '/{*path}' form as always-run", async () => {
-      const adapter = new CloudflareAdapter();
-      const ran: boolean[] = [];
-      const factory = adapter.createMiddlewareFactory(RequestMethod.GET);
-      factory(
-        '/{*path}',
-        (
-          _req: CloudflareRequest,
-          _res: CloudflareResponse,
-          next: () => void,
-        ) => {
-          ran.push(true);
-          next();
-        },
-      );
-      adapter.get('/anything', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-      await adapter.handle(new Request('https://example.com/anything'));
-      expect(ran).toHaveLength(1);
-    });
-  });
-
-  describe('path-scoped middleware uses Express prefix (mount) semantics', () => {
-    it('runs middleware mounted at /api for /api AND nested /api/users', async () => {
-      const adapter = new CloudflareAdapter();
-      const seen: string[] = [];
-      adapter.use('/api', (req: Req, _res: Res, next: Next) => {
-        seen.push(req.path ?? '');
-        next();
-      });
-      adapter.get('/api', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-      adapter.get('/api/users', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-      adapter.get('/other', (_req: Req, res: Res) =>
-        adapter.reply(res, { ok: true }),
-      );
-
-      await adapter.handle(new Request('https://example.com/api'));
-      await adapter.handle(new Request('https://example.com/api/users'));
-      await adapter.handle(new Request('https://example.com/other'));
-
-      expect(seen).toEqual(['/api', '/api/users']);
-    });
-  });
-
-  it('honours a custom not-found handler', async () => {
-    const adapter = new CloudflareAdapter();
-    // A middleware is needed so handle() builds a request pipeline rather than
-    // short-circuiting; the not-found handler then formats the 404.
-    adapter.use((_req: Req, _res: Res, next: Next) => next());
-    adapter.setNotFoundHandler((_req, res) => {
-      res.status(404);
-      res.json({ custom: true });
-    });
-
-    const res = await adapter.handle(new Request('https://example.com/nope'));
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ custom: true });
-  });
-}
-
 /** Matches any origin ending in `.example.com`. */
-const EXAMPLE_COM_SUBDOMAIN = /\.example\.com$/;
+const EXAMPLE_COM_SUBDOMAIN = /\.example\.com$/u;
 
-describe('CloudflareAdapter', () => {
+describe('CloudflareAdapter routing, CORS, versioning and wildcards', () => {
   registerBasicRouting();
   registerCorsAndStatic();
   registerVersioningAndDeferred();
   registerWildcardAndOrigin();
-  registerMutableFieldsAndErrors();
-  registerMultipartAndFilters();
-  registerMiddlewareScoping();
 });

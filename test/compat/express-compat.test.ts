@@ -5,8 +5,10 @@ import {
   createExpressRequest,
   createExpressResponse,
   wrapExpressMiddleware,
-  type ExpressMiddleware,
-  type ExpressErrorMiddleware,
+} from '../../src/compat/express-compat.js';
+import type {
+  ExpressMiddleware,
+  ExpressErrorMiddleware,
 } from '../../src/compat/express-compat.js';
 import type {
   CloudflareRequest,
@@ -165,8 +167,9 @@ describe('createExpressResponse', () => {
     const cfRes = mockResponse();
     const res = createExpressResponse(cfRes);
     res.cookie('token', 'xyz', { httpOnly: true, path: '/' });
-    expect(cfRes.getHeader('Set-Cookie')).toContain('token=xyz');
-    expect(cfRes.getHeader('Set-Cookie')).toContain('HttpOnly');
+    const setCookie = cfRes.getHeader('Set-Cookie');
+    expect(setCookie).toContain('token=xyz');
+    expect(setCookie).toContain('HttpOnly');
   });
 
   it('setHeader() with an array REPLACES rather than appends (Node semantics)', () => {
