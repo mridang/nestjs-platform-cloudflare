@@ -597,14 +597,17 @@ export function createFastifyReply(
           cfRes.setHeader('Content-Type', 'application/octet-stream');
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the narrowed byte buffers are valid response bodies; TypeScript only objects because a Uint8Array may in theory sit on a SharedArrayBuffer, which Workers do not have
         cfRes.send(payload as BodyInit);
       } else if (typeof payload === 'object') {
         if (!cfRes.getHeader('Content-Type')) {
           cfRes.setHeader('Content-Type', 'application/json; charset=utf-8');
         }
         cfRes.send(serializer(payload));
+      } else if (typeof payload === 'number' || typeof payload === 'boolean') {
+        cfRes.send(String(payload));
       } else {
-        cfRes.send((payload as number | boolean).toString());
+        throw new TypeError('Cannot send a value of this type');
       }
       return reply;
     },
@@ -722,11 +725,13 @@ export function wrapFastifyHook(
 export async function wrapFastifyPlugin<Options = Record<string, unknown>>(
   plugin: FastifyPlugin<Options> | FastifyPluginAsync<Options>,
   instance: FastifyLikeInstance,
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Options is the caller's type parameter, so an empty object cannot be proven to satisfy it, and Fastify itself passes an empty options object when none is given
   opts: Options = {} as Options,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (plugin.length <= 2) {
       // Async plugin
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the plugin's arity separates the async style from the callback style, and TypeScript cannot narrow a union of functions by their length
       const result = (plugin as FastifyPluginAsync<Options>)(instance, opts);
       if (result instanceof Promise) {
         result.then(resolve).catch(reject);

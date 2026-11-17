@@ -77,6 +77,7 @@ function mockResponse(): CloudflareResponse {
     send(body) {
       res.sent = true;
       res.headersSent = true;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- send accepts any object as a body, which the real adapter serializes later, while this fake stores the value as given and the tests only send strings
       res.body = (body ?? null) as typeof res.body;
     },
     json(body) {
@@ -93,7 +94,8 @@ function mockResponse(): CloudflareResponse {
     end(body) {
       res.sent = true;
       res.headersSent = true;
-      res.body = body ?? null;
+
+      res.body = (body ?? null) as typeof res.body;
     },
     cookie(name, value) {
       headers.append('Set-Cookie', `${name}=${value}`);

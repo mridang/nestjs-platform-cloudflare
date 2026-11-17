@@ -327,14 +327,17 @@ function headerProxy(headers: Headers): Headers {
     get(target, property, receiver) {
       if (typeof property === 'string' && !(property in target)) {
         const value = target.get(property);
-        return value === null ? undefined : value;
+        return value ?? undefined;
       }
       // eslint-disable-next-line tslop/no-reflect-get -- looks up members on the Headers target by arbitrary property key through the proxy
       const value: unknown = Reflect.get(target, property, receiver);
-      return typeof value === 'function'
-        ? // eslint-disable-next-line tslop/no-unknown-returns -- the proxy passes through whatever a Headers method returns
-          (value as (...args: unknown[]) => unknown).bind(target)
-        : value;
+      if (typeof value === 'function') {
+        const bound: unknown = value.bind(target);
+
+        return bound;
+      }
+
+      return value;
     },
     has(target, property) {
       if (typeof property === 'string' && target.has(property)) {
@@ -348,7 +351,7 @@ function headerProxy(headers: Headers): Headers {
 /** The subset of Nest's `StreamableFile` the adapter reads. */
 interface StreamableFileLike {
   /** Return the underlying Node Readable stream. */
-  getStream(): { on?: unknown };
+  getStream(): NodeStreamLike;
   /** Return the response headers (type, disposition, length). */
   getHeaders(): {
     type?: string;
@@ -372,19 +375,35 @@ interface StreamableFileLike {
  * ```
  */
 function asStreamableFile(body: unknown): StreamableFileLike | null {
-  if (
-    typeof body === 'object' &&
-    body !== null &&
-    typeof (body as StreamableFileLike).getStream === 'function' &&
-    typeof (body as StreamableFileLike).getHeaders === 'function'
-  ) {
-    return body as StreamableFileLike;
+  return isStreamableFile(body) ? body : null;
+}
+
+/**
+ * Tells whether a value has the `getStream` and `getHeaders` methods of a
+ * Nest `StreamableFile`.
+ * @param body - The value a controller returned.
+ * @returns True when both methods are present.
+ * @example
+ * ```ts
+ * isStreamableFile(new StreamableFile(buffer)); // true
+ * ```
+ */
+function isStreamableFile(body: unknown): body is StreamableFileLike {
+  if (typeof body !== 'object' || body === null) {
+    return false;
   }
-  return null;
+  return (
+    'getStream' in body &&
+    typeof body.getStream === 'function' &&
+    'getHeaders' in body &&
+    typeof body.getHeaders === 'function'
+  );
 }
 
 /** Structural subset of a Node Readable stream that the adapter converts. */
-type NodeStreamLike = { on?: unknown };
+type NodeStreamLike = {
+  on(event: string, callback: (arg?: unknown) => void): void;
+};
 
 /** Byte stream that the Workers runtime can send as a response body. */
 
@@ -404,25 +423,27 @@ type WebByteStream = ReadableStream<Uint8Array>;
  * ```
  */
 function nodeStreamToWeb(nodeStream: NodeStreamLike): WebByteStream {
-  const ctor = (
-    nodeStream as { constructor?: { toWeb?: (s: unknown) => ReadableStream } }
-  ).constructor;
-  if (ctor && typeof ctor.toWeb === 'function') {
-    return ctor.toWeb(nodeStream) as WebByteStream;
+  const ctor: unknown = nodeStream.constructor;
+  if (typeof ctor === 'function' && 'toWeb' in ctor) {
+    const toWeb: unknown = ctor.toWeb;
+    if (typeof toWeb === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Readable.toWeb is a Node-only static reached by duck-typing, because the adapter must not import node:stream, and its result is a ReadableStream of bytes by Node's own contract
+      return Reflect.apply(toWeb, ctor, [nodeStream]) as WebByteStream;
+    }
   }
-  const stream = nodeStream as {
-    on(event: string, callback: (arg?: unknown) => void): void;
-  };
+  const stream = nodeStream;
 
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      stream.on('data', (chunk) =>
-        controller.enqueue(
-          chunk instanceof Uint8Array
-            ? chunk
-            : new Uint8Array(chunk as ArrayBufferLike),
-        ),
-      );
+      stream.on('data', (chunk) => {
+        if (chunk instanceof Uint8Array) {
+          controller.enqueue(chunk);
+        } else if (chunk instanceof ArrayBuffer) {
+          controller.enqueue(new Uint8Array(chunk));
+        } else {
+          // Anything else is not bytes and contributes none.
+        }
+      });
       stream.on('end', () => controller.close());
       stream.on('error', (err) => controller.error(err));
     },
@@ -450,6 +471,49 @@ type Handler = (
   err?: unknown,
   // eslint-disable-next-line tslop/no-unknown-returns -- handlers and hooks return whatever the application returns, and the adapter ignores it
 ) => unknown;
+
+/**
+ * Tells whether a value Nest handed to the adapter can be called as a middleware.
+ * Only callability can be checked at run time; the signature is Nest's contract.
+ * @param value - The middleware or route handler Nest passed in.
+ * @returns True when the value is a function.
+ * @example
+ * ```ts
+ * isHandler((req, res, next) => next()); // true
+ * ```
+ */
+function isHandler(value: unknown): value is Handler {
+  return typeof value === 'function';
+}
+
+/**
+ * Tells whether a value passed to `app.use()` can be called as Express middleware.
+ * @param value - The argument of `use`.
+ * @returns True when the value is a function.
+ * @example
+ * ```ts
+ * isExpressMiddleware(helmet()); // true
+ * ```
+ */
+function isExpressMiddleware(value: unknown): value is ExpressMiddleware {
+  return typeof value === 'function';
+}
+
+/**
+ * Tells whether the second argument of a Fastify route shorthand is the handler
+ * rather than the route options.
+ * @param value - The options object or handler given to `get`, `post` and the like.
+ * @returns True when the value is the handler function.
+ * @example
+ * ```ts
+ * isRouteHandler(async () => 'ok'); // true
+ * ```
+ */
+function isRouteHandler(
+  value: Partial<FastifyRouteOptions> | FastifyRouteHandler | undefined,
+): value is FastifyRouteHandler {
+  return typeof value === 'function';
+}
 
 /** Route parameters extracted from a matched path. */
 type Params = Record<string, string | undefined>;
@@ -867,15 +931,17 @@ function buildRouteHandler(
     for (const [key, value] of Object.entries(requestDecorators)) {
       // eslint-disable-next-line functional/immutable-data -- decorator values are attached to the Fastify request or reply object, as Fastify does
       fastifyReq[key] =
-        // eslint-disable-next-line tslop/no-unknown-returns -- decorator functions may return any value the application chose
-        typeof value === 'function' ? (value as () => unknown)() : value;
+        typeof value === 'function'
+          ? Reflect.apply(value, undefined, [])
+          : value;
     }
     // eslint-disable-next-line functional/no-loop-statements -- copies the decorator values onto the request or reply one by one
     for (const [key, value] of Object.entries(replyDecorators)) {
       // eslint-disable-next-line functional/immutable-data -- decorator values are attached to the Fastify request or reply object, as Fastify does
       fastifyReply[key] =
-        // eslint-disable-next-line tslop/no-unknown-returns -- decorator functions may return any value the application chose
-        typeof value === 'function' ? (value as () => unknown)() : value;
+        typeof value === 'function'
+          ? Reflect.apply(value, undefined, [])
+          : value;
     }
 
     const hooks = [
@@ -892,11 +958,11 @@ function buildRouteHandler(
       await runFastifyHook(hook, fastifyReq, fastifyReply);
     }
 
-    if (!fastifyReply.sent) {
-      const result = await opts.handler(fastifyReq, fastifyReply);
-      if (result !== undefined && !fastifyReply.sent) {
-        fastifyReply.send(result);
-      }
+    const result = fastifyReply.sent
+      ? undefined
+      : await opts.handler(fastifyReq, fastifyReply);
+    if (result !== undefined && !fastifyReply.sent) {
+      fastifyReply.send(result);
     }
   };
 }
@@ -1204,11 +1270,13 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    */
   public use(...args: readonly unknown[]): void {
     const hasPath = args.length >= 2;
-    const fn = (hasPath ? args[1] : args[0]) as Handler;
-    if (typeof fn !== 'function') {
+    const fn: unknown = hasPath ? args[1] : args[0];
+    if (!isHandler(fn)) {
       return;
     }
-    const path = hasPath ? (args[0] as string) : null;
+    const pathArgument: unknown = args[0];
+    const path =
+      hasPath && typeof pathArgument === 'string' ? pathArgument : null;
     // eslint-disable-next-line functional/immutable-data -- middleware is appended in registration order
     this.middleware.push({
       match: CloudflareAdapter.middlewarePattern(path),
@@ -1274,6 +1342,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       }
     } catch (error) {
       if (this.errorHandler) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the public setErrorHandler type promises an Error, and the thrown value is passed through unchanged so a handler sees exactly what was thrown
         this.errorHandler(error as Error, req, res);
         // An async exception filter (e.g. one that awaits a logger before
         // replying) writes the response on a later tick. Await settling so the
@@ -1366,21 +1435,21 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       settings,
 
       use: (...args: unknown[]): void => {
-        if (args.length === 1 && typeof args[0] === 'function') {
-          this.useExpressMiddleware(args[0] as ExpressMiddleware);
+        if (args.length === 1 && isExpressMiddleware(args[0])) {
+          this.useExpressMiddleware(args[0]);
         } else if (
           args.length === 2 &&
           typeof args[0] === 'string' &&
-          typeof args[1] === 'function'
+          isExpressMiddleware(args[1])
         ) {
-          this.useExpressMiddleware(args[0], args[1] as ExpressMiddleware);
+          this.useExpressMiddleware(args[0], args[1]);
         } else if (args.length >= 2) {
           const path = typeof args[0] === 'string' ? args[0] : '*';
           const handlers = typeof args[0] === 'string' ? args.slice(1) : args;
           // eslint-disable-next-line functional/no-loop-statements -- registers each handler in order
           for (const handler of handlers) {
-            if (typeof handler === 'function') {
-              this.useExpressMiddleware(path, handler as ExpressMiddleware);
+            if (isExpressMiddleware(handler)) {
+              this.useExpressMiddleware(path, handler);
             }
           }
         } else {
@@ -1530,6 +1599,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
             name,
           )
         ) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the hook name decides the hook's kind, and the check above leaves only the four request-phase names, whose hooks are FastifyHook, but TypeScript cannot correlate a name with its hook type
           registerHook(name, hook as FastifyHook);
         }
         return instance;
@@ -1564,10 +1634,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         return instance;
       },
 
-      get(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      get(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1576,10 +1648,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      post(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      post(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1588,10 +1662,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      put(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      put(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1600,10 +1676,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      delete(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      delete(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1612,10 +1690,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      patch(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      patch(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1624,10 +1704,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      options(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      options(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1636,10 +1718,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      head(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      head(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1648,10 +1732,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           handler: h,
         });
       },
-      all(path, optsOrHandler?, handler?) {
-        const h = (
-          typeof optsOrHandler === 'function' ? optsOrHandler : handler!
-        ) as FastifyRouteHandler;
+      all(
+        path: string,
+        optsOrHandler?: Partial<FastifyRouteOptions> | FastifyRouteHandler,
+        handler?: FastifyRouteHandler,
+      ) {
+        const h = isRouteHandler(optsOrHandler) ? optsOrHandler : handler!;
         const opts = typeof optsOrHandler === 'object' ? optsOrHandler : {};
         return instance.route({
           ...opts,
@@ -1692,13 +1778,13 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       // getHeaders() and a Node Readable via getStream(); convert the Readable to
       // a Web ReadableStream so the Workers runtime can stream it.
       const fileHeaders = streamable.getHeaders();
-      if (fileHeaders?.type && !res.headers.has('content-type')) {
+      if (fileHeaders.type && !res.headers.has('content-type')) {
         res.headers.set('content-type', fileHeaders.type);
       }
-      if (fileHeaders?.disposition) {
+      if (fileHeaders.disposition) {
         res.headers.set('content-disposition', fileHeaders.disposition);
       }
-      if (fileHeaders?.length !== undefined) {
+      if (fileHeaders.length !== undefined) {
         res.headers.set('content-length', String(fileHeaders.length));
       }
       const nodeStream = streamable.getStream();
@@ -1726,7 +1812,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       body instanceof ArrayBuffer ||
       body instanceof ReadableStream
     ) {
-      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
+      // eslint-disable-next-line functional/immutable-data, @typescript-eslint/no-unsafe-type-assertion -- the buffered response is read back when the Web Response is built, and the narrowed byte buffers or stream are valid bodies (TypeScript only objects because a Uint8Array may in theory sit on a SharedArrayBuffer, which Workers do not have)
       res.body = body as BodyInit;
     } else {
       // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
@@ -1931,9 +2017,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    */
   // eslint-disable-next-line tslop/no-unknown-returns -- mirrors Nest's AbstractHttpAdapter.listen signature
   public listen(_port: unknown, ...args: readonly unknown[]): unknown {
-    const onListen = args.find((arg) => typeof arg === 'function') as
-      (() => void) | undefined;
-    onListen?.();
+    const onListen: unknown = args.find((arg) => typeof arg === 'function');
+    if (typeof onListen === 'function') {
+      Reflect.apply(onListen, undefined, []);
+    }
     return this.httpServer;
   }
 
@@ -2005,10 +2092,13 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest passes an untyped Function callback
   ): (path: string, fn: Function) => void {
     return (path, fn) => {
+      if (!isHandler(fn)) {
+        return;
+      }
       // eslint-disable-next-line functional/immutable-data -- middleware is appended in registration order
       this.middleware.push({
         match: CloudflareAdapter.middlewarePattern(path),
-        fn: fn as Handler,
+        fn,
       });
     };
   }
@@ -2061,7 +2151,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       if (
         CloudflareAdapter.versionMatches(version, requested, versioningOptions)
       ) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest expects an untyped Function return value
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type, @typescript-eslint/no-unsafe-type-assertion -- Nest expects an untyped Function return value, and the matched handler's result is passed through unchanged
         return run(req, res, next) as Function;
       }
       next();
@@ -2198,8 +2288,11 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   private register(method: string, args: readonly unknown[]): void {
-    const path = args[0] as string;
-    const handler = args[1] as Handler;
+    const path: unknown = args.at(0);
+    const handler: unknown = args.at(1);
+    if (typeof path !== 'string' || !isHandler(handler)) {
+      throw new TypeError('A route needs a string path and a handler function');
+    }
     const bucket = this.bucketFor(method);
     if (isDynamic(path)) {
       // eslint-disable-next-line functional/immutable-data -- the per-method route table is filled as routes register
@@ -2360,17 +2453,13 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         // (e.g. `/users/:id` and `/users/:name`) can both match the same path
         // but bind different param names; sharing one params object across the
         // merged chain would feed later handlers the first route's params.
-        // eslint-disable-next-line functional/no-let -- tracks the first matched route's params while the routes are scanned
-        let params: Params = EMPTY;
-        if (matched.pathname.groups) {
-          // Drop unmatched optional groups (present as `undefined` on the
-          // native runtime) so the exposed record stays truthful.
-          params = Object.fromEntries(
-            Object.entries(matched.pathname.groups).filter(
-              (entry): entry is [string, string] => entry[1] !== undefined,
-            ),
-          );
-        }
+        // Drop unmatched optional groups (present as `undefined` on the
+        // native runtime) so the exposed record stays truthful.
+        const params: Params = Object.fromEntries(
+          Object.entries(matched.pathname.groups).filter(
+            (entry): entry is [string, string] => entry[1] !== undefined,
+          ),
+        );
         // eslint-disable-next-line functional/immutable-data -- matched routes are collected in match order
         handlers.push({ handler: route.handler, params });
         if (firstParams === EMPTY) {
@@ -2535,7 +2624,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
           res.body = JSON.stringify(body);
         } else {
-          // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
+          // eslint-disable-next-line functional/immutable-data, @typescript-eslint/no-unsafe-type-assertion -- the buffered response is read back when the Web Response is built, and a body that is not a string or JSON value reaches here as a stream, blob, form data or byte buffer the Response constructor accepts
           res.body = body as BodyInit;
         }
         resolve();
@@ -2637,8 +2726,8 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         }
         const entry = chain[index];
         const isErrorHandler =
-          (entry.fn as { isExpressErrorMiddleware?: boolean })
-            .isExpressErrorMiddleware === true;
+          'isExpressErrorMiddleware' in entry.fn &&
+          entry.fn.isExpressErrorMiddleware === true;
         // While an error is in flight, run only error handlers; with no error,
         // run only normal middleware. Skip the rest without invoking them.
         if (err !== undefined && !isErrorHandler) {
@@ -2649,26 +2738,30 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           dispatch(index + 1);
           return;
         }
-        // eslint-disable-next-line functional/no-let -- one-shot guard so next() is honoured only once
-        let advanced = false;
+        const advancement = { advanced: false };
         const next: Next = (nextErr) => {
-          if (advanced) {
+          if (advancement.advanced) {
             return;
           }
-          advanced = true;
+          // eslint-disable-next-line functional/immutable-data -- one-shot guard so next() is honoured only once
+          advancement.advanced = true;
           // If an error handler advances without a new error, the error is
           // considered handled; carry forward `nextErr` otherwise.
           dispatch(index + 1, nextErr);
         };
+        // The middleware may send the response while it runs, so read the flag afresh.
+        const responded = (): boolean => res.sent;
         try {
           const result = entry.fn(req, res, next, err);
           if (result instanceof Promise) {
             // A middleware that responded without calling next() (e.g. a guard, or an
             // error handler that sent a response) ends here.
             result
-              .then(() => (res.sent && !advanced ? resolve() : undefined))
+              .then(() =>
+                responded() && !advancement.advanced ? resolve() : undefined,
+              )
               .catch(reject);
-          } else if (res.sent && !advanced) {
+          } else if (responded() && !advancement.advanced) {
             resolve();
           } else {
             // The middleware has not responded yet, so the chain continues through next().
@@ -2920,6 +3013,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         });
         return resolved;
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the arity check above separates Nest's callback-style CustomOrigin from the value-returning form, which TypeScript cannot see
       const result = (fn as (o: string) => boolean | string)(requestOrigin);
       return originFromAllow(result, requestOrigin);
     }

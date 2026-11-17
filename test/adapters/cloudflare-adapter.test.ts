@@ -24,9 +24,8 @@ function registerBasicRouting(): void {
       new Request('https://example.com/missing'),
     );
     expect(res.status).toBe(404);
-    const body = (await res.json()) as { statusCode: number; error: string };
-    expect(body.statusCode).toBe(404);
-    expect(body.error).toBe('Not Found');
+    const body: unknown = await res.json();
+    expect(body).toMatchObject({ statusCode: 404, error: 'Not Found' });
   });
 
   it('routes a registered GET to its handler', async () => {
@@ -123,7 +122,7 @@ function registerBasicRouting(): void {
 
     expect(seen?.body).toEqual({ field: 'value' });
     expect(seen?.files.file).toBeInstanceOf(File);
-    expect(seen?.files.file?.name).toBe('a.txt');
+    expect(seen?.files.file.name).toBe('a.txt');
   });
 
   it('parses cookies from the Cookie header', async () => {
