@@ -97,7 +97,9 @@ function registerMutableFieldsAndErrors(): void {
           next: unknown,
         ) => {
           expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
+          res.status(500).json({
+            caught: failure instanceof Error ? failure.message : 'not an error',
+          });
         },
       );
       adapter.get('/x', (_req: CloudflareRequest, res: CloudflareResponse) =>
@@ -146,7 +148,9 @@ function registerMutableFieldsAndErrors(): void {
           next: unknown,
         ) => {
           expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
+          res.status(500).json({
+            caught: failure instanceof Error ? failure.message : 'not an error',
+          });
         },
       );
       adapter.get(
@@ -176,7 +180,9 @@ function registerMutableFieldsAndErrors(): void {
           next: unknown,
         ) => {
           expect(next).toBeInstanceOf(Function);
-          res.status(500).json({ caught: (failure as Error).message });
+          res.status(500).json({
+            caught: failure instanceof Error ? failure.message : 'not an error',
+          });
         },
       );
       adapter.get(

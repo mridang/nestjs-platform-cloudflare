@@ -545,7 +545,7 @@ export function createExpressRequest(
 
     xhr:
       cfReq.headers.get('x-requested-with')?.toLowerCase() === 'xmlhttprequest',
-    subdomains: cfReq.hostname?.split('.').slice(0, -2).toReversed() || [],
+    subdomains: cfReq.hostname?.split('.').slice(0, -2).toReversed() ?? [],
 
     get(name: string): string | undefined {
       const key = name.toLowerCase();
@@ -777,8 +777,10 @@ export function createExpressResponse(
         cfRes.send(body);
       } else if (typeof body === 'object') {
         return res.json(body);
+      } else if (typeof body === 'number' || typeof body === 'boolean') {
+        cfRes.send(String(body));
       } else {
-        cfRes.send((body as number | boolean).toString());
+        throw new TypeError('Cannot send a value of this type');
       }
       return res;
     },
@@ -866,8 +868,8 @@ export function createExpressResponse(
       return res;
     },
 
-    format(object: Record<string, () => void>) {
-      const accept = cfRes.headers.get?.('Accept') || '*/*';
+    format(object: Partial<Record<string, () => void>>) {
+      const accept = cfRes.headers.get('Accept') || '*/*';
       const types = Object.keys(object);
       const matched = parseAccept(accept, types);
 
@@ -905,6 +907,22 @@ export type WrappedExpressMiddleware = ((
 };
 
 /**
+ * Tells whether an Express middleware is a 4-argument error handler, which
+ * Express itself decides by the function's arity.
+ * @param middleware - The Express middleware or error handler.
+ * @returns True when the function declares four or more parameters.
+ * @example
+ * ```ts
+ * hasErrorArity((err, req, res, next) => next(err)); // true
+ * ```
+ */
+function hasErrorArity(
+  middleware: ExpressMiddleware | ExpressErrorMiddleware,
+): middleware is ExpressErrorMiddleware {
+  return middleware.length >= 4;
+}
+
+/**
  * Wrap an Express middleware to work with the Cloudflare adapter.
  *
  * Normal (3-arg) middleware run on every pass; if they call `next(err)` the
@@ -917,7 +935,7 @@ export type WrappedExpressMiddleware = ((
 export function wrapExpressMiddleware(
   middleware: ExpressMiddleware | ExpressErrorMiddleware,
 ): WrappedExpressMiddleware {
-  const isErrorMiddleware = middleware.length >= 4;
+  const isErrorMiddleware = hasErrorArity(middleware);
 
   const wrapped = async (
     cfReq: CloudflareRequest,
@@ -956,7 +974,7 @@ export function wrapExpressMiddleware(
           return;
         }
         try {
-          const result = (middleware as ExpressErrorMiddleware)(
+          const result = middleware(
             incomingErr,
             expressReq,
             expressRes,
@@ -983,11 +1001,7 @@ export function wrapExpressMiddleware(
       }
 
       try {
-        const result = (middleware as ExpressMiddleware)(
-          expressReq,
-          expressRes,
-          expressNext,
-        );
+        const result = middleware(expressReq, expressRes, expressNext);
         if (result instanceof Promise) {
           result
             .then(settleIfSent)

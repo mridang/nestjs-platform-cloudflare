@@ -80,6 +80,7 @@ function mockResponse(): CloudflareResponse {
     send(body) {
       res.sent = true;
       res.headersSent = true;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- send accepts any object as a body, which the real adapter serializes later, while this fake stores the value as given and the tests only send strings
       res.body = (body ?? null) as typeof res.body;
     },
     json(body) {
@@ -96,7 +97,8 @@ function mockResponse(): CloudflareResponse {
     end(body) {
       res.sent = true;
       res.headersSent = true;
-      res.body = body ?? null;
+
+      res.body = (body ?? null) as typeof res.body;
     },
     cookie(name, value) {
       headers.append('Set-Cookie', `${name}=${value}`);
@@ -211,7 +213,7 @@ describe('createExpressResponse', () => {
     const res = createExpressResponse(cfRes);
     res.cookie('a', '1');
     res.cookie('b', '2');
-    const read = res.get('set-cookie') as unknown as string[];
+    const read: unknown = res.get('set-cookie');
     expect(Array.isArray(read)).toBe(true);
     expect(read).toHaveLength(2);
   });
@@ -222,6 +224,7 @@ describe('wrapExpressMiddleware', () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
     const wrapped = wrapExpressMiddleware(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- helmet is real Express middleware typed against Node's IncomingMessage and ServerResponse, which the adapter's compat request and response types deliberately do not extend
       helmet() as unknown as ExpressMiddleware,
     );
 
@@ -237,6 +240,7 @@ describe('wrapExpressMiddleware', () => {
   it('runs a real cookie-parser and populates req.cookies', async () => {
     const cfReq = mockRequest();
     const cfRes = mockResponse();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- cookie-parser is real Express middleware typed against Node's IncomingMessage and ServerResponse, which the adapter's compat request and response types deliberately do not extend
     const parser = cookieParser() as unknown as ExpressMiddleware;
 
     // cookie-parser reads from the same wrapped express request each call, so
@@ -298,7 +302,7 @@ describe('wrapExpressMiddleware', () => {
       }),
     ).resolves.toBeUndefined();
     expect(forwarded).toBeInstanceOf(Error);
-    expect((forwarded as Error).message).toBe('boom');
+    expect(forwarded).toHaveProperty('message', 'boom');
   });
 
   it('does not invoke a 4-arg error handler on the normal (non-error) path', async () => {
@@ -337,7 +341,9 @@ describe('wrapExpressMiddleware', () => {
     const errorHandler: ExpressErrorMiddleware = (err, _req, res, next) => {
       expect(next).toBeInstanceOf(Function);
       seenErr = err;
-      res.status(500).json({ caught: (err as Error).message });
+      res
+        .status(500)
+        .json({ caught: err instanceof Error ? err.message : 'not an error' });
     };
     const wrapped = wrapExpressMiddleware(errorHandler);
     expect(wrapped.isExpressErrorMiddleware).toBe(true);
@@ -345,7 +351,7 @@ describe('wrapExpressMiddleware', () => {
     await expect(
       wrapped(cfReq, cfRes, () => {}, new Error('handled')),
     ).resolves.toBeUndefined();
-    expect((seenErr as Error).message).toBe('handled');
+    expect(seenErr).toHaveProperty('message', 'handled');
     expect(cfRes.statusCode).toBe(500);
     expect(cfRes.sent).toBe(true);
 
@@ -376,7 +382,7 @@ describe('wrapExpressMiddleware', () => {
         forwarded = err;
       }),
     ).resolves.toBeUndefined();
-    expect((forwarded as Error).message).toBe('sync-boom');
+    expect(forwarded).toHaveProperty('message', 'sync-boom');
   });
 
   it('forwards an async rejection to next(err) instead of rejecting (Express compat)', async () => {
@@ -393,7 +399,7 @@ describe('wrapExpressMiddleware', () => {
         forwarded = err;
       }),
     ).resolves.toBeUndefined();
-    expect((forwarded as Error).message).toBe('async-boom');
+    expect(forwarded).toHaveProperty('message', 'async-boom');
   });
 
   it('forwards a throw from a 4-arg error handler to next(err)', async () => {
@@ -415,7 +421,7 @@ describe('wrapExpressMiddleware', () => {
         new Error('original'),
       ),
     ).resolves.toBeUndefined();
-    expect((forwarded as Error).message).toBe('rethrown');
+    expect(forwarded).toHaveProperty('message', 'rethrown');
   });
 
   it('resolves when an async 4-arg error handler responds to a propagated error', async () => {
@@ -429,7 +435,9 @@ describe('wrapExpressMiddleware', () => {
     ) => {
       expect(next).toBeInstanceOf(Function);
       await Promise.resolve();
-      res.status(403).json({ caught: (failure as Error).message });
+      res.status(403).json({
+        caught: failure instanceof Error ? failure.message : 'not an error',
+      });
     };
     const wrapped = wrapExpressMiddleware(errorHandler);
 
