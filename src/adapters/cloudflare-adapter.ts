@@ -3,19 +3,10 @@
  */
 import { AbstractHttpAdapter } from '@nestjs/core';
 import { VERSION_NEUTRAL, VersioningType } from '@nestjs/common';
-import type { VersioningOptions, RequestMethod } from '@nestjs/common';
-import type {
-  CloudflareHttpServer,
-  CloudflareCorsOptions,
-  CloudflareStaticAssetsOptions,
-} from '../interfaces/cloudflare-http-options.interface.js';
 import {
   wrapExpressMiddleware,
   createExpressRequest,
   createExpressResponse,
-  type ExpressMiddleware,
-  type ExpressErrorMiddleware,
-  type ExpressLikeApp,
 } from '../compat/express-compat.js';
 import {
   wrapFastifyHook,
@@ -23,18 +14,31 @@ import {
   createFastifyRequest,
   createFastifyReply,
   createFastifyLogger,
-  type FastifyHook,
-  type FastifyCompatRequest,
-  type FastifyCompatReply,
   isAsyncHook,
-  type FastifyPlugin,
-  type FastifyPluginAsync,
-  type FastifyLikeInstance,
-  type FastifyRouteHandler,
-  type FastifyRouteOptions,
-  type FastifyErrorHook,
-  type FastifyOnSendHook,
-  type FastifyHookName,
+} from '../compat/fastify-compat.js';
+import type {
+  ExpressMiddleware,
+  ExpressErrorMiddleware,
+  ExpressLikeApp,
+} from '../compat/express-compat.js';
+import type { VersioningOptions, RequestMethod } from '@nestjs/common';
+import type {
+  CloudflareHttpServer,
+  CloudflareCorsOptions,
+  CloudflareStaticAssetsOptions,
+} from '../interfaces/cloudflare-http-options.interface.js';
+import type {
+  FastifyHook,
+  FastifyCompatRequest,
+  FastifyCompatReply,
+  FastifyPlugin,
+  FastifyPluginAsync,
+  FastifyLikeInstance,
+  FastifyRouteHandler,
+  FastifyRouteOptions,
+  FastifyErrorHook,
+  FastifyOnSendHook,
+  FastifyHookName,
 } from '../compat/fastify-compat.js';
 
 /** Mirror of Nest's VersionValue (not re-exported from the package root). */
@@ -198,6 +202,7 @@ export interface CloudflareResponse {
    * @param body - Body to send.
    */
 
+  // eslint-disable-next-line tslop/no-object-parameters -- Nest and Express allow any object as a response body
   send(body?: BodyInit | object | null): void;
 
   /**
@@ -282,31 +287,23 @@ function serializeSetCookie(
   value: string,
   options: CookieOptions = {},
 ): string {
-  let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-  if (options.maxAge !== undefined) {
-    cookie += `; Max-Age=${Math.floor(options.maxAge / 1000)}`;
-  }
-  if (options.domain) {
-    cookie += `; Domain=${options.domain}`;
-  }
-  cookie += `; Path=${options.path ?? '/'}`;
-  if (options.expires) {
-    cookie += `; Expires=${options.expires.toUTCString()}`;
-  }
-  if (options.httpOnly) {
-    cookie += '; HttpOnly';
-  }
-  if (options.secure) {
-    cookie += '; Secure';
-  }
-  if (options.sameSite) {
-    const same =
-      options.sameSite === true
-        ? 'Strict'
-        : options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1);
-    cookie += `; SameSite=${same}`;
-  }
-  return cookie;
+  const sameSite =
+    options.sameSite === true
+      ? 'Strict'
+      : options.sameSite &&
+        options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1);
+  return [
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`,
+    options.maxAge === undefined
+      ? ''
+      : `; Max-Age=${Math.floor(options.maxAge / 1000)}`,
+    options.domain ? `; Domain=${options.domain}` : '',
+    `; Path=${options.path ?? '/'}`,
+    options.expires ? `; Expires=${options.expires.toUTCString()}` : '',
+    options.httpOnly ? '; HttpOnly' : '',
+    options.secure ? '; Secure' : '',
+    sameSite ? `; SameSite=${sameSite}` : '',
+  ].join('');
 }
 
 /**
@@ -332,9 +329,11 @@ function headerProxy(headers: Headers): Headers {
         const value = target.get(property);
         return value === null ? undefined : value;
       }
+      // eslint-disable-next-line tslop/no-reflect-get -- looks up members on the Headers target by arbitrary property key through the proxy
       const value: unknown = Reflect.get(target, property, receiver);
       return typeof value === 'function'
-        ? (value as (...args: unknown[]) => unknown).bind(target)
+        ? // eslint-disable-next-line tslop/no-unknown-returns -- the proxy passes through whatever a Headers method returns
+          (value as (...args: unknown[]) => unknown).bind(target)
         : value;
     },
     has(target, property) {
@@ -449,6 +448,7 @@ type Handler = (
   res: CloudflareResponse,
   next: Next,
   err?: unknown,
+  // eslint-disable-next-line tslop/no-unknown-returns -- handlers and hooks return whatever the application returns, and the adapter ignores it
 ) => unknown;
 
 /** Route parameters extracted from a matched path. */
@@ -569,9 +569,9 @@ function normalizePathPattern(path: string): string {
   return unwrapBraces(
     path
       // `{*name}` -> `:name*`
-      .replaceAll(/{\*(\w+)}/g, ':$1*')
+      .replaceAll(/\{\*(\w+)\}/gu, ':$1*')
       // `*name` -> `:name*`
-      .replaceAll(/\*(\w+)/g, ':$1*')
+      .replaceAll(/\*(\w+)/gu, ':$1*')
       // `(.*)` -> `*`
       .replaceAll('(.*)', '*'),
   );
@@ -589,8 +589,11 @@ function normalizePathPattern(path: string): string {
  * ```
  */
 function unwrapBraces(path: string): string {
+  // eslint-disable-next-line functional/no-let -- scan state of the single pass over the path
   let result = '';
+  // eslint-disable-next-line functional/no-let -- scan state of the single pass over the path
   let cursor = 0;
+  // eslint-disable-next-line functional/no-loop-statements -- scans braces with an index so an unclosed brace cannot cause rescans
   for (;;) {
     const open = path.indexOf('{', cursor);
     const close = open === -1 ? -1 : path.indexOf('}', open + 1);
@@ -615,18 +618,12 @@ function unwrapBraces(path: string): string {
 function parseQuery(
   params: URLSearchParams,
 ): Record<string, string | string[]> {
-  const result: Record<string, string | string[]> = {};
-  for (const [key, value] of params) {
-    const existing = result[key] as string | string[] | undefined;
-    if (existing === undefined) {
-      result[key] = value;
-    } else if (Array.isArray(existing)) {
-      existing.push(value);
-    } else {
-      result[key] = [existing, value];
-    }
-  }
-  return result;
+  return Object.fromEntries(
+    Array.from(new Set(params.keys()), (key) => {
+      const values = params.getAll(key);
+      return [key, values.length === 1 ? values[0] : values];
+    }),
+  );
 }
 
 /**
@@ -778,16 +775,17 @@ async function parseMultipartBody(request: Request): Promise<ParsedBody> {
   // Treat an unparseable multipart body as empty rather than crashing.
   try {
     const form = await request.formData();
-    const fields: Record<string, unknown> = {};
-    const files: Record<string, File> = {};
-    for (const [key, value] of form) {
-      if (value instanceof File) {
-        files[key] = value;
-      } else {
-        fields[key] = value;
-      }
-    }
-    return { body: fields, files };
+    const entries = [...form];
+    return {
+      body: Object.fromEntries(
+        entries.filter(([, value]) => !(value instanceof File)),
+      ),
+      files: Object.fromEntries(
+        entries.filter(
+          (entry): entry is [string, File] => entry[1] instanceof File,
+        ),
+      ),
+    };
   } catch {
     return { body: {}, files: emptyRecord<File>() };
   }
@@ -865,12 +863,18 @@ function buildRouteHandler(
     const fastifyReq = createFastifyRequest(req);
     const fastifyReply = createFastifyReply(res);
 
+    // eslint-disable-next-line functional/no-loop-statements -- copies the decorator values onto the request or reply one by one
     for (const [key, value] of Object.entries(requestDecorators)) {
+      // eslint-disable-next-line functional/immutable-data -- decorator values are attached to the Fastify request or reply object, as Fastify does
       fastifyReq[key] =
+        // eslint-disable-next-line tslop/no-unknown-returns -- decorator functions may return any value the application chose
         typeof value === 'function' ? (value as () => unknown)() : value;
     }
+    // eslint-disable-next-line functional/no-loop-statements -- copies the decorator values onto the request or reply one by one
     for (const [key, value] of Object.entries(replyDecorators)) {
+      // eslint-disable-next-line functional/immutable-data -- decorator values are attached to the Fastify request or reply object, as Fastify does
       fastifyReply[key] =
+        // eslint-disable-next-line tslop/no-unknown-returns -- decorator functions may return any value the application chose
         typeof value === 'function' ? (value as () => unknown)() : value;
     }
 
@@ -880,6 +884,7 @@ function buildRouteHandler(
       ...toHookList(opts.preHandler),
     ];
 
+    // eslint-disable-next-line functional/no-loop-statements -- hooks run one after another and stop once the reply is sent
     for (const hook of hooks) {
       if (fastifyReply.sent) {
         break;
@@ -1181,7 +1186,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * ```
    */
   public all(...args: readonly unknown[]): void {
-    for (const verb of ALL_VERBS) this.register(verb, args);
+    // eslint-disable-next-line functional/no-loop-statements -- registers the route once per HTTP verb
+    for (const verb of ALL_VERBS) {
+      this.register(verb, args);
+    }
   }
 
   /**
@@ -1201,6 +1209,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       return;
     }
     const path = hasPath ? (args[0] as string) : null;
+    // eslint-disable-next-line functional/immutable-data -- middleware is appended in registration order
     this.middleware.push({
       match: CloudflareAdapter.middlewarePattern(path),
       fn,
@@ -1276,7 +1285,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       } else if (res.sent) {
         // Without an error handler, a response that is already sent is kept.
       } else {
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.statusCode = 500;
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.body = 'Internal Server Error';
       }
     }
@@ -1338,6 +1349,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       path: string,
       handlers: ExpressMiddleware[],
     ): void => {
+      // eslint-disable-next-line functional/no-loop-statements -- registers each handler in order
       for (const handler of handlers) {
         method.call(this, path, async (req, res) => {
           await handler(
@@ -1365,6 +1377,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         } else if (args.length >= 2) {
           const path = typeof args[0] === 'string' ? args[0] : '*';
           const handlers = typeof args[0] === 'string' ? args.slice(1) : args;
+          // eslint-disable-next-line functional/no-loop-statements -- registers each handler in order
           for (const handler of handlers) {
             if (typeof handler === 'function') {
               this.useExpressMiddleware(path, handler as ExpressMiddleware);
@@ -1393,12 +1406,15 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         registerRoute(this.all.bind(this), path, handlers),
 
       set(key, value) {
+        // eslint-disable-next-line functional/immutable-data -- app.set, enable and disable write into the settings table that app.get reads
         settings[key] = value;
       },
       enable(key) {
+        // eslint-disable-next-line functional/immutable-data -- app.set, enable and disable write into the settings table that app.get reads
         settings[key] = true;
       },
       disable(key) {
+        // eslint-disable-next-line functional/immutable-data -- app.set, enable and disable write into the settings table that app.get reads
         settings[key] = false;
       },
       enabled(key) {
@@ -1481,14 +1497,17 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       prefix: '',
 
       decorate(name, value) {
+        // eslint-disable-next-line functional/immutable-data -- decorate() registers the value on the table copied onto each request or reply
         decorators[name] = value;
         return instance;
       },
       decorateRequest(name, value) {
+        // eslint-disable-next-line functional/immutable-data -- decorate() registers the value on the table copied onto each request or reply
         requestDecorators[name] = value;
         return instance;
       },
       decorateReply(name, value) {
+        // eslint-disable-next-line functional/immutable-data -- decorate() registers the value on the table copied onto each request or reply
         replyDecorators[name] = value;
         return instance;
       },
@@ -1532,6 +1551,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           ? opts.method
           : [opts.method];
 
+        // eslint-disable-next-line functional/no-loop-statements -- registers the route once per method
         for (const method of methods) {
           const register =
             routeRegistrars.get(method.toUpperCase()) ?? allRoute;
@@ -1662,6 +1682,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     statusCode?: number,
   ): void {
     if (statusCode) {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.statusCode = statusCode;
     }
     const streamable = asStreamableFile(body);
@@ -1682,15 +1703,20 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       }
       const nodeStream = streamable.getStream();
 
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.body = nodeStreamToWeb(nodeStream) as BodyInit;
+      // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
       res.sent = true;
+      // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
       res.headersSent = true;
       res.settle();
       return;
     }
     if (body === undefined || body === null) {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.body = null;
     } else if (typeof body === 'string') {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.body = body;
       if (!res.headers.has('content-type')) {
         res.headers.set('content-type', 'text/plain; charset=utf-8');
@@ -1700,14 +1726,18 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       body instanceof ArrayBuffer ||
       body instanceof ReadableStream
     ) {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.body = body as BodyInit;
     } else {
+      // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
       res.body = JSON.stringify(body);
       if (!res.headers.has('content-type')) {
         res.headers.set('content-type', 'application/json; charset=utf-8');
       }
     }
+    // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
     res.sent = true;
+    // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
     res.headersSent = true;
     res.settle();
   }
@@ -1726,6 +1756,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     res: CloudflareResponse,
     statusCode: number,
   ): CloudflareResponse {
+    // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
     res.statusCode = statusCode;
     return res;
   }
@@ -1745,9 +1776,12 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     statusCode: number,
     url: string,
   ): void {
+    // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
     res.statusCode = statusCode || 302;
     res.headers.set('location', url);
+    // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
     res.sent = true;
+    // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
     res.headersSent = true;
     res.settle();
   }
@@ -1895,6 +1929,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * adapter.listen(3000, () => console.log('ready'));
    * ```
    */
+  // eslint-disable-next-line tslop/no-unknown-returns -- mirrors Nest's AbstractHttpAdapter.listen signature
   public listen(_port: unknown, ...args: readonly unknown[]): unknown {
     const onListen = args.find((arg) => typeof arg === 'function') as
       (() => void) | undefined;
@@ -1938,9 +1973,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
    * await adapter.close();
    * ```
    */
-  public async close(): Promise<void> {
-    return;
-  }
+  public async close(): Promise<void> {}
 
   /**
    * No-op: request bodies are parsed natively in {@link handle}, so there is no
@@ -1972,6 +2005,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- Nest passes an untyped Function callback
   ): (path: string, fn: Function) => void {
     return (path, fn) => {
+      // eslint-disable-next-line functional/immutable-data -- middleware is appended in registration order
       this.middleware.push({
         match: CloudflareAdapter.middlewarePattern(path),
         fn: fn as Handler,
@@ -2143,7 +2177,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     if (existing) {
       return existing;
     }
+    // eslint-disable-next-line tslop/no-bare-new-map -- the types come from the Bucket annotation on the binding
     const created: Bucket = { exact: new Map(), dynamic: [] };
+    // eslint-disable-next-line functional/immutable-data -- the per-method route table is filled as routes register
     this.buckets.set(method, created);
     return created;
   }
@@ -2166,6 +2202,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     const handler = args[1] as Handler;
     const bucket = this.bucketFor(method);
     if (isDynamic(path)) {
+      // eslint-disable-next-line functional/immutable-data -- the per-method route table is filled as routes register
       bucket.dynamic.push({
         pattern: new URLPattern({ pathname: normalizePathPattern(path) }),
         handler,
@@ -2173,8 +2210,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     } else {
       const existing = bucket.exact.get(path);
       if (existing) {
+        // eslint-disable-next-line functional/immutable-data -- the per-method route table is filled as routes register
         existing.push(handler);
       } else {
+        // eslint-disable-next-line functional/immutable-data -- the per-method route table is filled as routes register
         bucket.exact.set(path, [handler]);
       }
     }
@@ -2214,6 +2253,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           resolve(false);
           return;
         }
+        // eslint-disable-next-line functional/no-let -- one-shot guard so next() is honoured only once
         let advanced = false;
         const next: Next = (err) => {
           if (advanced) {
@@ -2247,6 +2287,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         // later, differently-parameterized route in the same fall-through chain
         // sees its own param names rather than the first match's.
         const entry = handlers[index];
+        // eslint-disable-next-line functional/immutable-data -- the matched route's params are exposed on the request, as Express does
         req.params = entry.params === EMPTY ? emptyRecord() : entry.params;
         try {
           const result = entry.handler(req, res, next);
@@ -2309,7 +2350,9 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       };
     }
     const handlers: HandlerEntry[] = [];
+    // eslint-disable-next-line functional/no-let -- tracks the first matched route's params while the routes are scanned
     let firstParams: Params = EMPTY;
+    // eslint-disable-next-line functional/no-loop-statements -- matches each dynamic route in turn and keeps the first params
     for (const route of bucket.dynamic) {
       const matched = route.pattern.exec(url);
       if (matched) {
@@ -2317,6 +2360,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         // (e.g. `/users/:id` and `/users/:name`) can both match the same path
         // but bind different param names; sharing one params object across the
         // merged chain would feed later handlers the first route's params.
+        // eslint-disable-next-line functional/no-let -- tracks the first matched route's params while the routes are scanned
         let params: Params = EMPTY;
         if (matched.pathname.groups) {
           // Drop unmatched optional groups (present as `undefined` on the
@@ -2327,6 +2371,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
             ),
           );
         }
+        // eslint-disable-next-line functional/immutable-data -- matched routes are collected in match order
         handlers.push({ handler: route.handler, params });
         if (firstParams === EMPTY) {
           firstParams = params;
@@ -2450,6 +2495,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       settled: promise,
       settle: resolve,
       status(code) {
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.statusCode = code;
         return res;
       },
@@ -2475,40 +2521,55 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
         return res;
       },
       send(body) {
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.headersSent = true;
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.sent = true;
         if (body === undefined || body === null) {
+          // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
           res.body = null;
         } else if (isJsonBody(body)) {
           if (!headers.has('content-type')) {
             headers.set('content-type', 'application/json; charset=utf-8');
           }
+          // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
           res.body = JSON.stringify(body);
         } else {
+          // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
           res.body = body as BodyInit;
         }
         resolve();
       },
       json(body) {
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.headersSent = true;
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.sent = true;
         if (!headers.has('content-type')) {
           headers.set('content-type', 'application/json; charset=utf-8');
         }
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.body = JSON.stringify(body);
         resolve();
       },
       redirect(url, code = 302) {
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.headersSent = true;
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.sent = true;
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.statusCode = code;
         headers.set('location', url);
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.body = null;
         resolve();
       },
       end(message) {
+        // eslint-disable-next-line functional/immutable-data -- the buffered response is read back when the Web Response is built
         res.body = message ?? null;
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.sent = true;
+        // eslint-disable-next-line functional/immutable-data -- Express-style flag that later handlers read to see the response is settled
         res.headersSent = true;
         resolve();
       },
@@ -2588,6 +2649,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
           dispatch(index + 1);
           return;
         }
+        // eslint-disable-next-line functional/no-let -- one-shot guard so next() is honoured only once
         let advanced = false;
         const next: Next = (nextErr) => {
           if (advanced) {
@@ -2761,8 +2823,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       'content-type': 'application/json; charset=utf-8',
     });
     if (corsRes) {
-      for (const [key, value] of corsRes.headers.entries())
+      // eslint-disable-next-line functional/no-loop-statements -- copies headers one by one onto the target response
+      for (const [key, value] of corsRes.headers.entries()) {
         headers.append(key, value);
+      }
     }
     return Response.json(
       {
@@ -2849,6 +2913,7 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
       // `(origin, cb: (err, allow) => void) => void`. Support both that and the
       // simpler value-returning form by branching on arity.
       if (fn.length >= 2) {
+        // eslint-disable-next-line functional/no-let -- set by the origin callback that Nest's CustomOrigin calls
         let resolved = '';
         fn(requestOrigin, (_err, allow) => {
           resolved = originFromAllow(allow, requestOrigin);
@@ -2879,8 +2944,10 @@ export class CloudflareAdapter extends AbstractHttpAdapter<
     if (!from) {
       return;
     }
-    for (const [key, value] of from.headers.entries())
+    // eslint-disable-next-line functional/no-loop-statements -- copies headers one by one onto the target response
+    for (const [key, value] of from.headers.entries()) {
       to.headers.append(key, value);
+    }
   }
 
   /**

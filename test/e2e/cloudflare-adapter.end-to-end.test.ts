@@ -9,31 +9,31 @@ import {
   Param,
   HttpCode,
   Module,
-  type INestApplication,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { CloudflareAdapter } from '../../src/index.js';
+import type { INestApplication } from '@nestjs/common';
 
 @Controller()
 class AppController {
   @Get('/ping')
-  ping(): { pong: true } {
+  ping() {
     return { pong: true };
   }
 
   @Get('/users/:id')
-  user(@Param('id') id: string): { id: string } {
+  user(@Param('id') id: string) {
     return { id };
   }
 
   @Post('/echo')
-  echo(@Body() body: unknown): unknown {
+  echo<Body>(@Body() body: Body): Body {
     return body;
   }
 
   @Post('/no-content')
   @HttpCode(204)
-  noContent(): { ignored: true } {
+  noContent() {
     return { ignored: true };
   }
 }

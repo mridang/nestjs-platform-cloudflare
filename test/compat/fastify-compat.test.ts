@@ -4,8 +4,10 @@ import {
   createFastifyReply,
   wrapFastifyHook,
   createFastifyLogger,
-  type FastifyHookAsync,
-  type FastifyHookCallback,
+} from '../../src/compat/fastify-compat.js';
+import type {
+  FastifyHookAsync,
+  FastifyHookCallback,
 } from '../../src/compat/fastify-compat.js';
 import type {
   CloudflareRequest,
